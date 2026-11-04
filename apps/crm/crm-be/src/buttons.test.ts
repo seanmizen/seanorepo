@@ -66,20 +66,21 @@ describe('each button that cannot act (REQ-CRM-BUTTON-001)', () => {
   test('each button is present in each state, and an off button has the native disabled, and its reason in title and in its accessible description (REQ-CRM-BUTTON-001)', async () => {
     const admin = signInAdmin(app);
 
-    // The pager: an empty list, the first page and the last page.
+    // The pager on the plate: an empty list, the first page and the last
+    // page. The caption under each key is its reason.
     const pager = async (url: string) => {
       const html = await get(url, admin);
       return [
         html.includes('rel="prev"')
           ? 'link'
-          : reason(html, 'page-previous', 'previous'),
+          : reason(html, 'page-prev', 'Prev'),
         html.includes('rel="next"')
           ? 'link'
-          : reason(html, 'page-next', 'next'),
+          : reason(html, 'page-next', 'Next'),
       ];
     };
-    const FIRST = 'This is the first page.';
-    const LAST = 'This is the last page.';
+    const FIRST = 'First page';
+    const LAST = 'Last page';
     expect(await pager('/')).toEqual([FIRST, LAST]);
     addOrgs(PAGE_SIZE + 1);
     expect(await pager('/')).toEqual([FIRST, 'link']);

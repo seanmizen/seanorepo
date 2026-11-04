@@ -47,7 +47,7 @@ Each page is a rack over a band, both the full width of the page. The rack is th
 3. **No walk order.** There is no route, no house-number sort and no map. The sorts are due, created date and name. The crm is a general client record tool. Door-to-door is one source of leads, not the shape of the app.
 4. **A press changes only its effect.** When JavaScript runs, each form submit and each in-app link updates the page in place. The script morphs the new HTML into the page. The focused control and the scroll position stay. With no JavaScript, the pages work as plain forms and links. The morph ticket registers this as a requirement.
 5. **Layout shift is a bug.** Three rules keep the page still when its data changes. Each row has a fixed height. Keys always exist (REQ-CRM-BUTTON-001). A save or an error has a fixed line in the glass.
-6. **LEDs.** An LED is on metal only. Each LED position has one meaning. The chassis seam of a band row is due. A key-top LED is on. A latch LED is a pressed filter or mode. The blinking ink mark is the only mark in the glass (REQ-CRM-LCD-001).
+6. **LEDs.** An LED is on metal only. Each LED position has one meaning. The chassis seam of a band row is due. A key-top LED is on. A latch LED is a pressed filter or mode. The blinking ink mark is the only mark in the glass (REQ-CRM-LCD-002).
 7. **Breakpoints.** The width breakpoint stays at 960px. One height query is also allowed: the display unit stays at the top only in a window 720px or taller.
 8. **Keyboard keys** wait until Sean asks for them.
 

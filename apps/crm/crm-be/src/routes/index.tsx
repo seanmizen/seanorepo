@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { dueWords, today } from '../dates';
+import { addDays, dueWords, fullDateTime, isoDateTime, today } from '../dates';
 import {
   formText,
   isStage,
@@ -10,38 +10,33 @@ import {
   type Stage,
 } from '../org';
 import { type PageParts, renderPage } from '../render';
+import { Band, type BandGroup } from '../ui/Band';
 import { BareText } from '../ui/BareText';
 import { Box } from '../ui/Box';
-import { Device } from '../ui/Device';
+import { ControlUnit } from '../ui/ControlUnit';
+import { DisplayUnit, type PlateKey } from '../ui/DisplayUnit';
 import { Key, Keys } from '../ui/Key';
 import { LatchKey } from '../ui/LatchKey';
-import { Lcd } from '../ui/Lcd';
 import { Module } from '../ui/Module';
+import { Rack } from '../ui/Rack';
 import { When } from '../ui/When';
 
 /**
- * The sort keys of the list, in order: the text on each key, the text of
- * each direction, and the LCD column that sets the order. The list legend
- * uses the same words.
+ * The sort keys of the list, after `Due` (the default order): the text on
+ * each key, and the text of each direction. The legends of the band use
+ * the same words. The sorts are due, date added and name, and no other
+ * (`apps/crm/docs/002-rack.md`, decision 3).
  */
 export const SORTS = {
-  activity: {
-    text: 'Last activity',
-    asc: 'Oldest first',
-    desc: 'Newest first',
-    column: 'status',
-  },
   added: {
     text: 'Date added',
     asc: 'Oldest first',
     desc: 'Newest first',
-    column: 'status',
   },
   name: {
-    text: 'Organisation name',
+    text: 'Name',
     asc: 'A to Z',
     desc: 'Z to A',
-    column: 'name',
   },
 } as const;
 
@@ -68,9 +63,35 @@ export const LIST_PATHS = ['/', '/orgs'] as const;
 export type ListPath = (typeof LIST_PATHS)[number];
 
 /**
+ * The groups of the Plan, in order: each organisation is in one group, by
+ * the date of its next action. The gutter of the band names each group.
+ * `days` is true when a group covers more than one day, so its rows show
+ * their date (`apps/crm/docs/002-rack.md`, Timeline rows).
+ */
+export const DUE_GROUPS = [
+  { name: 'Overdue', days: true },
+  { name: 'Today', days: false },
+  { name: 'Next 7 days', days: true },
+  { name: 'Later', days: true },
+  { name: 'None', days: false },
+] as const;
+
+/**
+ * The number (the index in `DUE_GROUPS`) of the group of each organisation,
+ * in SQL. `$today` is today, and `$week` is today plus 7 days.
+ */
+const DUE_GROUP = `CASE
+    WHEN next_action_on IS NULL THEN 4
+    WHEN next_action_on < $today THEN 0
+    WHEN next_action_on = $today THEN 1
+    WHEN next_action_on <= $week THEN 2
+    ELSE 3
+  END`;
+
+/**
  * The state of the list. The URL holds all of it:
  * `?q=<text>&stage=<stage>&sort=<sort>&dir=<asc|desc>&page=<n>`. An empty
- * `sort` is the default order.
+ * `sort` is the default order: due first.
  */
 export interface ListQuery {
   q: string;
@@ -113,14 +134,16 @@ export const listHref = (path: ListPath, state: ListQuery) => {
 };
 
 /**
- * The sort after a press on the key `key`. The first press sorts
- * ascending, the second press descending, and the third press removes the
- * sort. A press on a different key replaces the sort.
+ * The sort after a press on the key `key`. `''` is the Due key: it sets the
+ * default order. The first press on Date added or Name sorts ascending, the
+ * second press descending, and the third press sets the default order. A
+ * press on a different key replaces the sort.
  */
 export const nextSort = (
   { sort, dir }: Pick<ListQuery, 'sort' | 'dir'>,
-  key: Sort,
+  key: Sort | '',
 ): Pick<ListQuery, 'sort' | 'dir'> => {
+  if (key === '') return { sort: '', dir: 'asc' };
   if (sort !== key) return { sort: key, dir: 'asc' };
   if (dir === 'asc') return { sort: key, dir: 'desc' };
   return { sort: '', dir: 'asc' };
@@ -140,43 +163,79 @@ const Hidden = ({ fields }: { fields: Record<string, string> }) =>
 /** One row of the list. */
 export type ListRow = Pick<
   Org,
-  'slug' | 'name' | 'stage' | 'next_action_on' | 'created_at'
+  | 'slug'
+  | 'name'
+  | 'stage'
+  | 'next_action'
+  | 'next_action_on'
+  | 'postcode'
+  | 'created_at'
 > & {
   /**
    * The newest of the last visit, the last note and `created_at`. A hidden
    * visit or note does not count (REQ-CRM-UNDO-001).
    */
   last_activity: string;
+  /** The index of the group of the row in `DUE_GROUPS`. */
+  due_group: number;
 };
 
 /**
- * The list of every organisation, at `/` and at `/orgs`.
+ * The date of a next action as a band cell: the date and its status in
+ * words. A row in a group of one day (Today) shows only the words, and its
+ * `<time>` keeps the date in its attributes. With no date, the cell says
+ * None.
+ */
+const DueCell = ({ date, days }: { date: string | null; days: boolean }) => {
+  if (date === null) return <span className="none">None</span>;
+  if (!days) {
+    return (
+      <time dateTime={isoDateTime(date)} title={fullDateTime(date)}>
+        {dueWords(date)}
+      </time>
+    );
+  }
+  return (
+    <>
+      <When value={date} />
+      <span className="sep"> · </span>
+      <span className="words">{dueWords(date)}</span>
+    </>
+  );
+};
+
+/**
+ * The home: the Plan (`apps/crm/docs/002-rack.md`, decision 1), at `/` and
+ * at `/orgs`. The page is a rack over a band (REQ-CRM-LAYOUT-002).
  *
- * - The LCD: the organisations as a menu, as the track list of autosam.
- *   Each row is a link to `/orgs/<slug>`, with the name, the stage, the
- *   next action date and the last activity date. The LED of the row, in
- *   the bezel, is lit when the next action is due today or overdue
- *   (REQ-CRM-LCD-001). With the Date added sort, the second date is the
- *   date added, so the list shows the value that it is in order of.
- * - Sort: three latching keys. A lit key has a green LED for ascending, and
- *   a red LED for descending. With no key lit, the order is the default:
- *   due first. The legend of the column that sets the order shows an
- *   arrow, `▲` or `▼`. The default order puts it on Next action, `▲`.
- * - Search and stage: one GET form. The Search key sends the stage that is
- *   lit, so the Enter key in the field keeps it. Each stage key sends its
- *   own stage.
- * - New lead: opens `/orgs/new`.
- * - The pager, in the footer: `previous`, the rows of this page, `next`.
- *   Both are always in their place. On the first page `previous` is off,
- *   and on the last page `next` is off, each with the reason
+ * - The display unit. The glass reads the first organisation of the list
+ *   (its name, its next action and its due date), the counts of Overdue
+ *   and Today, and the rows that show. The plate keys are the pager: Prev
+ *   and Next. Both are always in their place, and each caption says the
+ *   page that the key opens, or why the key is off: First page, Last page
  *   (REQ-CRM-BUTTON-001).
+ * - The control unit. Search (with New lead), Stage and Sort, side by side.
+ *   Search and Stage are one GET form. The Search key sends the stage that
+ *   is lit, so the Enter key in the field keeps it. Each stage key sends
+ *   its own stage. Sort has three latching keys: Due (the default order),
+ *   Date added and Name. Date added and Name sort ascending (green LED),
+ *   then descending (red LED), then go back to Due.
+ * - The band. Each organisation is one row, in a group of `DUE_GROUPS`:
+ *   Overdue, Today, Next 7 days, Later, None. The sort sets the order in
+ *   each group. Due puts the oldest due date first, then the newest last
+ *   activity. The LED of a row, on the chassis seam, is lit when the next
+ *   action is due today or overdue. Overdue shows three times: the LED, the
+ *   group name and the words, for example "3 days overdue". With the Date
+ *   added sort, the last column is the date added in place of the last
+ *   activity, so the band shows the value that it is in order of.
  *
- * Each key is a GET submit to `path`, so the URL holds the search, the
- * stage and the sort, and each key works with no page styles and no
- * JavaScript. With JavaScript, each key and the pager update the page in
- * place (REQ-CRM-MORPH-001). With a search in the URL, the search field has `autofocus`, so
- * a full page load also puts the cursor back in it. The words on the page
- * are the words of its keys and legends, with no help text.
+ * Each key is a GET submit or a link to `path`, so the URL holds the
+ * search, the stage, the sort and the page, and each key works with no page
+ * styles and no JavaScript. With JavaScript, each key updates the page in
+ * place (REQ-CRM-MORPH-001). Each row has a fixed height, and each key is
+ * always present, so the page does not move when its data changes. With a
+ * search in the URL, the search field has `autofocus`, so a full page load
+ * also puts the cursor back in it.
  */
 export const listPage = ({
   path,
@@ -184,190 +243,213 @@ export const listPage = ({
   query,
   rows,
   total,
+  counts,
 }: {
   path: ListPath;
   date: string;
   query: ListQuery;
   rows: ListRow[];
   total: number;
+  /** The number of organisations in each group of `DUE_GROUPS`. */
+  counts: number[];
 }): PageParts => {
   const { q, stage, sort, dir, page } = query;
-  const dateName = sort === 'added' ? SORTS.added.text : SORTS.activity.text;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const first = (page - 1) * PAGE_SIZE + 1;
+  const firstRow = (page - 1) * PAGE_SIZE + 1;
+  const first = rows[0];
+  const order = sort
+    ? `In each group, sorted by ${lower(SORTS[sort].text)}, ${lower(SORTS[sort][dir])}`
+    : 'Sorted by due date, oldest first';
+  const groups: BandGroup[] = DUE_GROUPS.map((group, index) => ({
+    name: group.name,
+    count: counts[index] ?? 0,
+    rows: rows
+      .filter((row) => row.due_group === index)
+      .map((row) => ({
+        href: orgPath(row.slug),
+        name: row.name,
+        led: row.next_action_on !== null && row.next_action_on <= date,
+        cells: [
+          { value: STAGES[row.stage] },
+          row.next_action
+            ? { value: row.next_action, title: row.next_action }
+            : { value: <span className="none">None</span> },
+          {
+            value: <DueCell date={row.next_action_on} days={group.days} />,
+          },
+          {
+            value: (
+              <When
+                value={sort === 'added' ? row.created_at : row.last_activity}
+                time={false}
+              />
+            ),
+          },
+          {
+            value: row.postcode || <span className="none">None</span>,
+          },
+        ],
+      })),
+  }));
+  const keys: PlateKey[] = [
+    page > 1
+      ? {
+          id: 'page-prev',
+          label: 'Prev',
+          caption: `Page ${page - 1} of ${pages}`,
+          href: listHref(path, { ...query, page: page - 1 }),
+          rel: 'prev',
+        }
+      : { id: 'page-prev', label: 'Prev', caption: 'First page', off: true },
+    page < pages
+      ? {
+          id: 'page-next',
+          label: 'Next',
+          caption: `Page ${page + 1} of ${pages}`,
+          href: listHref(path, { ...query, page: page + 1 }),
+          rel: 'next',
+        }
+      : { id: 'page-next', label: 'Next', caption: 'Last page', off: true },
+  ];
   return {
     title: 'Organisations',
-    device: (
-      <Device>
-        <Lcd
-          menu={{
-            legend: ['Organisation', 'Next action'],
-            sublegend: ['Stage', dateName],
-            order: sort
-              ? {
-                  column: SORTS[sort].column,
-                  dir,
-                  text: `Sorted by ${lower(SORTS[sort].text)}, ${lower(SORTS[sort][dir])}`,
-                }
-              : {
-                  column: 'value',
-                  dir: 'asc',
-                  text: 'Sorted by next action, oldest first',
-                },
-            empty:
-              q || stage ? 'No organisation matches.' : 'No organisations yet.',
-            items: rows.map((row) => {
-              const due =
-                row.next_action_on !== null && row.next_action_on <= date;
-              return {
-                href: orgPath(row.slug),
-                name: row.name,
-                title: `${row.name} · ${STAGES[row.stage]}`,
-                value: (
-                  <>
-                    <BareText>· next action </BareText>
-                    {row.next_action_on === null ? (
-                      <span className="none">None</span>
-                    ) : (
-                      <When value={row.next_action_on} />
-                    )}
-                    {due && row.next_action_on && (
-                      <BareText> ({dueWords(row.next_action_on)})</BareText>
-                    )}
-                  </>
-                ),
-                led: due,
-                detail: (
-                  <>
-                    <BareText>· stage </BareText>
-                    {STAGES[row.stage]}
-                  </>
-                ),
-                status: (
-                  <>
-                    <BareText>· {dateName.toLowerCase()} </BareText>
-                    <When
-                      value={
-                        sort === 'added' ? row.created_at : row.last_activity
-                      }
-                      time={false}
-                    />
-                  </>
-                ),
-              };
-            }),
-          }}
+    rack: (
+      <Rack>
+        <DisplayUnit
+          readings={[
+            {
+              label: 'First in list',
+              kind: 'name',
+              value: first?.name ?? 'None',
+              lines: [
+                { value: first?.next_action || 'No next action' },
+                first?.next_action_on
+                  ? {
+                      value: (
+                        <>
+                          <When value={first.next_action_on} /> ·{' '}
+                          {dueWords(first.next_action_on)}
+                        </>
+                      ),
+                      mark: first.next_action_on < date,
+                    }
+                  : { value: 'No due date' },
+              ],
+            },
+            { label: 'Overdue', kind: 'count', value: counts[0] ?? 0 },
+            { label: 'Today', kind: 'count', value: counts[1] ?? 0 },
+            {
+              label: 'Showing',
+              value:
+                total === 0
+                  ? '0'
+                  : `${firstRow}–${Math.min(total, page * PAGE_SIZE)}`,
+              lines: [{ value: `of ${total}` }],
+            },
+          ]}
+          keys={keys}
         />
-        <Module
-          id="sort"
-          label="Sort"
-          value={sort ? SORTS[sort][dir] : 'Due first'}
-        >
-          <SortKeys path={path} query={query} keys={['activity', 'added']} />
-          <SortKeys path={path} query={query} keys={['name']} />
-        </Module>
-        <form method="get" action={path}>
-          <Module label="Search">
-            <div className="search">
-              <label className="field">
-                <BareText>Name or postcode </BareText>
-                <input
-                  id="q"
-                  name="q"
-                  type="search"
-                  placeholder="Name or postcode"
-                  defaultValue={q}
-                  // biome-ignore lint/a11y/noAutofocus: after a search with no JavaScript, the full page load puts the cursor back in the field. Only a URL with a search sets it.
-                  autoFocus={q !== ''}
-                />
-              </label>
-              <span id="search-send" className="send">
-                <Hidden fields={{ sort, dir: sort ? dir : '' }} />
-                <Key
-                  name={stage ? 'stage' : undefined}
-                  value={stage || undefined}
-                >
-                  Search
-                </Key>
-              </span>
-            </div>
-          </Module>
-          <Module
-            id="stage"
-            label="Stage"
-            value={stage ? STAGES[stage] : 'All'}
-          >
-            <Keys>
-              <LatchKey name="stage" value="" on={stage === ''}>
-                All
-              </LatchKey>
-            </Keys>
-            <Keys grid>
-              {Object.entries(STAGES).map(([value, text]) => (
-                <LatchKey
-                  key={value}
-                  name="stage"
-                  value={value}
-                  on={stage === value}
-                >
-                  {text}
+        <ControlUnit>
+          <form method="get" action={path}>
+            <Module id="search" label="Search" span={3}>
+              <div className="search">
+                <label className="field">
+                  <BareText>Name or postcode </BareText>
+                  <input
+                    id="q"
+                    name="q"
+                    type="search"
+                    placeholder="Name or postcode"
+                    defaultValue={q}
+                    // biome-ignore lint/a11y/noAutofocus: after a search with no JavaScript, the full page load puts the cursor back in the field. Only a URL with a search sets it.
+                    autoFocus={q !== ''}
+                  />
+                </label>
+                <span id="search-send" className="send">
+                  <Hidden fields={{ sort, dir: sort ? dir : '' }} />
+                  <Key
+                    name={stage ? 'stage' : undefined}
+                    value={stage || undefined}
+                  >
+                    Search
+                  </Key>
+                </span>
+              </div>
+              <a className="key" href="/orgs/new">
+                New lead
+              </a>
+            </Module>
+            <Module
+              id="stage"
+              label="Stage"
+              value={stage ? STAGES[stage] : 'All'}
+              span={6}
+            >
+              <Keys four>
+                <LatchKey name="stage" value="" on={stage === ''}>
+                  All
                 </LatchKey>
-              ))}
-            </Keys>
-          </Module>
-        </form>
-        <Module label="Leads">
-          <form method="get" action="/orgs/new">
-            <Key>New lead</Key>
+                {Object.entries(STAGES).map(([value, text]) => (
+                  <LatchKey
+                    key={value}
+                    name="stage"
+                    value={value}
+                    on={stage === value}
+                  >
+                    {text}
+                  </LatchKey>
+                ))}
+              </Keys>
+            </Module>
           </form>
-        </Module>
-      </Device>
+          <Module
+            id="sort"
+            label="Sort"
+            value={sort ? SORTS[sort][dir] : 'Due first'}
+            span={3}
+          >
+            <SortKeys path={path} query={query} keys={['', 'added']} />
+            <SortKeys path={path} query={query} keys={['name']} />
+          </Module>
+        </ControlUnit>
+      </Rack>
     ),
-    pager: (
-      <>
-        {page > 1 ? (
-          <a href={listHref(path, { ...query, page: page - 1 })} rel="prev">
-            previous
-          </a>
-        ) : (
-          <Key
-            type="button"
-            className="link"
-            id="page-previous"
-            off="This is the first page."
-          >
-            previous
-          </Key>
-        )}{' '}
-        <span>
-          {total === 0
-            ? '0 of 0'
-            : `${first}–${Math.min(total, page * PAGE_SIZE)} of ${total}`}
-        </span>{' '}
-        {page < pages ? (
-          <a href={listHref(path, { ...query, page: page + 1 })} rel="next">
-            next
-          </a>
-        ) : (
-          <Key
-            type="button"
-            className="link"
-            id="page-next"
-            off="This is the last page."
-          >
-            next
-          </Key>
-        )}
-      </>
+    band: (
+      <Band
+        id="orgs-band"
+        title="Organisations"
+        info={order}
+        gutter="Due"
+        seam="Due now"
+        nameLabel="Organisation"
+        orderName={sort === 'name' ? dir : undefined}
+        columns={[
+          { label: 'Stage', name: 'c-stage' },
+          { label: 'Next action', name: 'c-action' },
+          {
+            label: 'Due date',
+            name: 'c-due',
+            order: sort ? undefined : 'asc',
+          },
+          sort === 'added'
+            ? { label: SORTS.added.text, name: 'c-last', order: dir }
+            : { label: 'Last activity', name: 'c-last' },
+          { label: 'Postcode', name: 'c-postcode' },
+        ]}
+        groups={groups}
+        empty={
+          q || stage ? 'No organisation matches.' : 'No organisations yet.'
+        }
+      />
     ),
   };
 };
 
 /**
  * One row of sort keys. Each key is a GET form that keeps the search and
- * the stage, and sends the sort of the next press. "Last activity" and
- * "Date added" do not fit three to a row on a phone, so the keys are two
- * rows: those two, then "Organisation name".
+ * the stage, and sends the sort of the next press. `''` is the Due key. The
+ * keys are two rows, so each label fits its key at the breakpoint: Due and
+ * Date added, then Name.
  */
 const SortKeys = ({
   path,
@@ -376,14 +458,14 @@ const SortKeys = ({
 }: {
   path: ListPath;
   query: ListQuery;
-  keys: Sort[];
+  keys: (Sort | '')[];
 }) => (
   <Keys>
     {keys.map((key) => {
       const next = nextSort(query, key);
       const on = query.sort === key;
       return (
-        <form key={key} method="get" action={path}>
+        <form key={key || 'due'} method="get" action={path}>
           <Hidden
             fields={{
               q: query.q,
@@ -392,13 +474,17 @@ const SortKeys = ({
               dir: next.sort ? next.dir : '',
             }}
           />
-          <LatchKey
-            on={on}
-            direction={on ? query.dir : undefined}
-            state={on ? SORTS[key][query.dir] : undefined}
-          >
-            {SORTS[key].text}
-          </LatchKey>
+          {key === '' ? (
+            <LatchKey on={on}>Due</LatchKey>
+          ) : (
+            <LatchKey
+              on={on}
+              direction={on ? query.dir : undefined}
+              state={on ? SORTS[key][query.dir] : undefined}
+            >
+              {SORTS[key].text}
+            </LatchKey>
+          )}
         </form>
       );
     })}
@@ -418,23 +504,20 @@ const WHERE = `WHERE ($q = '' OR name LIKE $name ESCAPE '\\'
     AND ($stage = '' OR stage = $stage)`;
 
 /**
- * The order of each sort. The default order puts a next action that is due
- * today or overdue first, the oldest first. Then it puts the rest, by the
- * last activity, the newest first.
+ * The order in each group of `DUE_GROUPS`, for each sort. Due puts the
+ * oldest due date first, then the newest last activity.
  */
 const ORDER: Record<Sort | '', string> = {
-  '': `CASE WHEN next_action_on <= $today THEN 0 ELSE 1 END,
-       CASE WHEN next_action_on <= $today THEN next_action_on END,
-       last_activity DESC`,
-  activity: 'last_activity',
+  '': 'next_action_on, last_activity DESC',
   added: 'created_at',
   name: 'name COLLATE NOCASE',
 };
 
 /**
- * One page of the organisations that match `query`, in its order, and the
- * count of all the organisations that match. A page after the last page
- * gives the last page.
+ * One page of the organisations that match `query`, in its order, the
+ * count of all the organisations that match, and the count of each group
+ * of `DUE_GROUPS`. The rows come group by group. A page after the last
+ * page gives the last page.
  */
 export const listOrgs = (db: Database, query: ListQuery, date: string) => {
   const filter = {
@@ -443,17 +526,23 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
     postcode: `%${likeText(query.q.toUpperCase().replace(/\s+/g, ''))}%`,
     stage: query.stage,
   };
-  const total =
-    db
-      .query<{ n: number }, typeof filter>(
-        `SELECT count(*) AS n FROM organisation ${WHERE};`,
-      )
-      .get(filter)?.n ?? 0;
+  const days = { today: date, week: addDays(date, 7) };
+  const counts = DUE_GROUPS.map(() => 0);
+  for (const row of db
+    .query<{ due_group: number; n: number }, typeof filter & typeof days>(
+      `SELECT ${DUE_GROUP} AS due_group, count(*) AS n
+       FROM organisation ${WHERE} GROUP BY due_group;`,
+    )
+    .all({ ...filter, ...days })) {
+    counts[row.due_group] = row.n;
+  }
+  const total = counts.reduce((sum, n) => sum + n, 0);
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
   const direction = query.sort && query.dir === 'desc' ? ' DESC' : '';
   const rows = db
-    .query<ListRow, typeof filter & { today: string; offset: number }>(
-      `SELECT slug, name, stage, next_action_on, created_at,
+    .query<ListRow, typeof filter & typeof days & { offset: number }>(
+      `SELECT slug, name, stage, next_action, next_action_on, postcode,
+         created_at, ${DUE_GROUP} AS due_group,
          max(
            created_at,
            coalesce((SELECT max(at) FROM visit
@@ -464,11 +553,12 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
                        AND note.hidden_at IS NULL), '')
          ) AS last_activity
        FROM organisation ${WHERE}
-       ORDER BY ${ORDER[query.sort]}${direction}, name COLLATE NOCASE, slug
+       ORDER BY due_group, ${ORDER[query.sort]}${direction},
+         name COLLATE NOCASE, slug
        LIMIT ${PAGE_SIZE} OFFSET $offset;`,
     )
-    .all({ ...filter, today: date, offset: (page - 1) * PAGE_SIZE });
-  return { rows, total, page };
+    .all({ ...filter, ...days, offset: (page - 1) * PAGE_SIZE });
+  return { rows, total, page, counts };
 };
 
 /** The heading of the public home. */
@@ -514,15 +604,20 @@ export const listRoute = (app: FastifyInstance, db: Database) => {
       }
       const date = today();
       const query = parseListQuery(request.query);
-      const { rows, total, page } = listOrgs(db, query, date);
-      return reply
-        .type('text/html; charset=utf-8')
-        .send(
-          renderPage(
-            request,
-            listPage({ path, date, query: { ...query, page }, rows, total }),
-          ),
-        );
+      const { rows, total, page, counts } = listOrgs(db, query, date);
+      return reply.type('text/html; charset=utf-8').send(
+        renderPage(
+          request,
+          listPage({
+            path,
+            date,
+            query: { ...query, page },
+            rows,
+            total,
+            counts,
+          }),
+        ),
+      );
     });
   }
 };

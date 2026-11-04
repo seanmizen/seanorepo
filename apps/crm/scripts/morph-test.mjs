@@ -17,9 +17,10 @@
  * 1. Type `sw11` in the search field and press Enter. The URL has
  *    `q=sw11`, the list shows only the rows that match, and the focus and
  *    the caret stay in the search field.
- * 2. Tap a stage key, then a sort key. Each one updates the list and the
- *    URL in place, and the key that had the focus has it again. The arrow
- *    of the order on the LCD legend moves in place: from Next action to
+ * 2. Tap a stage key, then a sort key. Each one updates the band and the
+ *    URL in place, and the key that had the focus has it again. The rack,
+ *    the band and its first row do not move. The arrow
+ *    of the order on the band legend moves in place: from Due date to
  *    Organisation, in the arrow column, and from `▲` to `▼`.
  * 3. On an organisation page in a short window, scroll down, type a note
  *    and tap a Log key. The note saves, the page does not load again, the
@@ -98,8 +99,8 @@ const waitForHealth = async () => {
   throw new Error(`crm-be did not answer on ${BASE}.`);
 };
 
-/** The names in the list, in order. */
-const names = (page) => page.locator('.lcd .menu .name').allTextContents();
+/** The names in the band, in order. */
+const names = (page) => page.locator('.chart tbody th a').allTextContents();
 
 /** The search field has the focus, with the caret at the end of `text`. */
 const searchHasFocus = (page, text) =>
@@ -112,6 +113,22 @@ const searchHasFocus = (page, text) =>
       field.selectionEnd === length
     );
   }, text.length);
+
+/**
+ * The place of the parts of the home: the height of the rack, the top of
+ * the band, and the top and height of its first row. A press that changes
+ * only the data keeps each of them (REQ-CRM-MORPH-001).
+ */
+const place = (page) =>
+  page.evaluate(() => {
+    const box = (selector) =>
+      document.querySelector(selector).getBoundingClientRect();
+    return {
+      rack: box('.rack').height,
+      band: box('.band').top,
+      row: [box('.chart tbody tr').top, box('.chart tbody tr').height],
+    };
+  });
 
 /** The organisation page of the test: Battersea Bakery. */
 const ORG = '/orgs/battersea-bakery';
@@ -137,28 +154,25 @@ const focusText = (page) =>
   page.evaluate(() => document.activeElement?.firstChild?.textContent);
 
 /**
- * The arrows of the order on the LCD legend: the arrow in the arrow column
- * of the name legend (`none` when it is blank), and the value and status
- * legends, which hold their arrow in their text. `left` is the left edge of
- * the arrow in the name legend, and `arrowColumn` is the left edge of the
- * arrow column of the first row. They are equal when the arrow is in the
- * arrow column.
+ * The arrows of the order on the band legend: the arrow in the arrow
+ * column of the name legend (`''` when it is blank), and each other legend
+ * with its arrow at its end. `left` is the left edge of the arrow in the
+ * name legend, and `arrowColumn` is the left edge of the arrow column of
+ * the first row. They are equal when the arrow is in the arrow column.
  */
 const arrows = (page) =>
   page.evaluate(() => {
-    const menu = document.querySelector('.lcd .menu');
-    const row = menu.querySelector('li');
-    const arrow = getComputedStyle(row, '::before');
-    const menuLeft = menu.getBoundingClientRect().left;
+    const head = document.querySelector('.chart thead');
+    const arrow = head.querySelector('.c-name .arrow');
     return {
-      name: arrow.content,
-      value: menu.dataset.legendValue,
-      status: menu.dataset.legendStatus,
-      left:
-        arrow.content === 'none'
-          ? undefined
-          : menuLeft + Number.parseFloat(arrow.left),
-      arrowColumn: menu.querySelector('.arrow').getBoundingClientRect().left,
+      name: arrow.textContent,
+      others: [...head.querySelectorAll('th:has(> .order)')].map(
+        (th) => th.textContent,
+      ),
+      left: arrow.getBoundingClientRect().left,
+      arrowColumn: document
+        .querySelector('.chart tbody .arrow')
+        .getBoundingClientRect().left,
     };
   });
 
@@ -198,7 +212,7 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForURL((url) => url.searchParams.get('q') === 'sw11');
   await page.waitForFunction(
-    () => document.querySelectorAll('.lcd .menu .name').length === 2,
+    () => document.querySelectorAll('.chart tbody th a').length === 2,
   );
   assert.deepEqual((await names(page)).sort(), [
     'Battersea Bakery',
@@ -208,10 +222,11 @@ try {
   assert.equal(await page.evaluate(() => window.morphMark), 'still here');
   console.log('ok: Enter in the search field updates the list in place');
 
+  const placeBefore = await place(page);
   await page.getByRole('button', { name: 'Quoted', exact: true }).click();
   await page.waitForURL((url) => url.searchParams.get('stage') === 'quoted');
   await page.waitForFunction(
-    () => document.querySelectorAll('.lcd .menu .name').length === 1,
+    () => document.querySelectorAll('.chart tbody th a').length === 1,
   );
   assert.deepEqual(await names(page), ['Lavender Hill Florist']);
   assert.equal(await focusText(page), 'Quoted');
@@ -222,18 +237,22 @@ try {
   );
   assert.equal(await page.inputValue('input[type="search"]'), 'sw11');
   assert.equal(await page.evaluate(() => window.morphMark), 'still here');
-  console.log('ok: a stage key updates the list in place, with focus kept');
+  assert.deepEqual(
+    await place(page),
+    placeBefore,
+    'The rack, the band and the first row do not move.',
+  );
+  console.log(
+    'ok: a stage key updates the list in place, with focus kept and no shift',
+  );
 
   await page.getByRole('button', { name: 'All', exact: true }).click();
   await page.waitForURL((url) => !url.searchParams.get('stage'));
-  // The default order: the arrow is on Next action, ascending.
+  // The default order: the arrow is on Due date, ascending.
   const byDefault = await arrows(page);
-  assert.equal(byDefault.name, 'none');
-  assert.equal(byDefault.value, '▲ Next action');
-  assert.equal(byDefault.status, 'Last activity');
-  await page
-    .getByRole('button', { name: 'Organisation name', exact: true })
-    .click();
+  assert.equal(byDefault.name, '');
+  assert.deepEqual(byDefault.others, ['Due date ▲']);
+  await page.getByRole('button', { name: 'Name', exact: true }).click();
   await page.waitForURL((url) => url.searchParams.get('sort') === 'name');
   await page.waitForFunction(
     () => document.querySelector('#sort .value')?.textContent === 'A to Z',
@@ -242,12 +261,11 @@ try {
     'Battersea Bakery',
     'Lavender Hill Florist',
   ]);
-  assert.equal(await focusText(page), 'Organisation name');
+  assert.equal(await focusText(page), 'Name');
   // The arrow moved to Organisation, in the arrow column of the rows.
   const byName = await arrows(page);
-  assert.equal(byName.name, '"▲"');
-  assert.equal(byName.value, 'Next action');
-  assert.equal(byName.status, 'Last activity');
+  assert.equal(byName.name, '▲');
+  assert.deepEqual(byName.others, []);
   assert.equal(byName.left, byName.arrowColumn);
   // The Name key keeps the focus, so Enter presses it again.
   await page.keyboard.press('Enter');
@@ -259,8 +277,8 @@ try {
     'Lavender Hill Florist',
     'Battersea Bakery',
   ]);
-  assert.equal(await focusText(page), 'Organisation name');
-  assert.equal((await arrows(page)).name, '"▼"');
+  assert.equal(await focusText(page), 'Name');
+  assert.equal((await arrows(page)).name, '▼');
   // The search form keeps the new sort: Enter sends it.
   await page.locator('input[type="search"]').fill('');
   await page.keyboard.press('Enter');
@@ -268,18 +286,16 @@ try {
   assert.equal(new URL(page.url()).searchParams.get('sort'), 'name');
   assert.equal((await names(page))[0], 'Lavender Hill Florist');
   assert.equal(await page.evaluate(() => window.morphMark), 'still here');
-  // Last activity: the arrow moves to the status legend.
-  await page
-    .getByRole('button', { name: 'Last activity', exact: true })
-    .click();
-  await page.waitForURL((url) => url.searchParams.get('sort') === 'activity');
+  // Date added: the arrow moves to the end of the Date added legend.
+  await page.getByRole('button', { name: 'Date added', exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.get('sort') === 'added');
   await page.waitForFunction(
     () =>
-      document.querySelector('.lcd .menu')?.dataset.legendStatus ===
-      '▲ Last activity',
+      document.querySelector('.chart thead .c-last')?.textContent ===
+      'Date added ▲',
   );
-  assert.equal((await arrows(page)).name, 'none');
-  assert.equal((await arrows(page)).value, 'Next action');
+  assert.equal((await arrows(page)).name, '');
+  assert.deepEqual((await arrows(page)).others, ['Date added ▲']);
   assert.equal(await page.evaluate(() => window.morphMark), 'still here');
   console.log(
     'ok: a sort key updates the list and the arrow of the order in place, with focus kept',
@@ -333,7 +349,7 @@ try {
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.locator('h1 a[href="/"]').click();
   await page.waitForFunction(
-    () => document.querySelectorAll('.lcd .menu .name').length === 4,
+    () => document.querySelectorAll('.chart tbody th a').length === 4,
   );
   assert.equal(new URL(page.url()).pathname, '/');
   assert.equal(
@@ -341,7 +357,7 @@ try {
     before.length + 1,
     'A changed URL goes into history.',
   );
-  await page.locator('.lcd .menu a', { hasText: 'Clapham Cafe' }).click();
+  await page.locator('.chart tbody th a', { hasText: 'Clapham Cafe' }).click();
   await page.waitForURL(`${BASE}/orgs/clapham-cafe`);
   await page.waitForFunction(() => document.title.startsWith('Clapham Cafe'));
   await page.goBack();

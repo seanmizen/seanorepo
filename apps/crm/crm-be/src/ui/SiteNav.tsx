@@ -31,7 +31,7 @@ const segmentText = (segment: string) => {
  *    sign out. The link to this page is text, not a link. "sign out" is a
  *    form, because it sends a POST. The links are in the HTML once, under
  *    the title. On a wide screen the theme shows them in the footer row
- *    (REQ-CRM-LAYOUT-001).
+ *    (REQ-CRM-LAYOUT-002).
  *
  * With no page styles, the title is a heading and the links are a list.
  */

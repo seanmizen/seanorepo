@@ -108,15 +108,28 @@ const editPages = (orgHtml: string) => {
   ];
 };
 
-/** The names in the menu of the LCD, in order. */
+/** The names in the band, in order. */
 const names = async (url: string) => {
   const response = await get(url);
   expect(response.statusCode).toBe(200);
   return [
     ...response.body.matchAll(
-      /<li><a href="\/orgs\/[^"]+" title="[^"]*"><span class="arrow" aria-hidden="true"><\/span><span class="name">([^<]+)<\/span>/g,
+      /<th scope="row" class="c-name" title="[^"]*"><a href="\/orgs\/[^"]+"><span class="arrow" aria-hidden="true"><\/span>([^<]+)<\/a><\/th>/g,
     ),
   ].map((m) => m[1]);
+};
+
+/** The band of a page: its `<section>`. */
+const bandOf = (html: string) => {
+  const start = html.indexOf('<section class="band"');
+  return start === -1 ? '' : html.slice(start, html.indexOf('</table>', start));
+};
+
+/** The row of the organisation `slug` in the band. */
+const rowOf = (html: string, slug: string) => {
+  const link = html.indexOf(`<a href="/orgs/${slug}">`);
+  const start = html.lastIndexOf('<tr>', link);
+  return html.slice(start, html.indexOf('</tr>', link) + '</tr>'.length);
 };
 
 /** Set the added time of an organisation. */
@@ -178,7 +191,12 @@ describe('GET / and GET /orgs', () => {
     expect(html).toContain(
       '<body><h1 id="top" class="title"><span aria-current="page">crm</span></h1><nav class="links"',
     );
-    expect(html).toContain('<div class="device"><div class="lcd">');
+    expect(html).toContain(
+      '<main><div class="rack"><div class="unit display">',
+    );
+    expect(html).toContain(
+      '<section class="band" aria-labelledby="orgs-band">',
+    );
     expect(html).toContain('<footer class="foot">');
     expect(html).toContain('No organisations yet.');
 
@@ -197,49 +215,75 @@ describe('GET / and GET /orgs', () => {
 
   test('has the "New lead" key, which opens /orgs/new', async () => {
     const html = (await get('/')).body;
-    expect(html).toContain(
-      '<form action="/orgs/new" method="get"><button type="submit" class="key">New lead</button></form>',
-    );
+    expect(html).toContain('<a class="key" href="/orgs/new">New lead</a>');
   });
 
-  test('the LCD lists every organisation as a menu: name, stage, next action date and last activity, with a lit LED in the bezel when due (REQ-CRM-LCD-001)', async () => {
+  test('the band lists every organisation in its due group, with the LED of each row on the seam, and text tells each value (REQ-CRM-LCD-002)', async () => {
     await addDue('Due Last Week', dayFromToday(-7), 'Knock again');
     await addDue('Due Today', dayFromToday(0));
     await addDue('Due Tomorrow', dayFromToday(1));
-    await addOrg(app, cookie, { name: 'No Date' });
+    await addDue('Due Next Month', dayFromToday(30));
+    await addOrg(app, cookie, { name: 'No Date', postcode: 'E1 6AN' });
     setAdded('no-date', '2026-01-01T10:00:00.000Z');
 
-    const lcd = divOf((await get('/')).body, 'lcd');
-    expect(lcd).toContain(
-      '<ol class="menu two-lines leds" data-legend-name="Organisation" data-legend-value="▲ Next action" data-legend-detail="Stage" data-legend-status="Last activity">',
+    const html = (await get('/')).body;
+    const band = bandOf(html);
+    // A real table: a legend over each column, and a <tbody> for each
+    // group, with its name and count in a rowgroup header.
+    expect(band).toContain(
+      '<thead><tr><th scope="col" class="c-gutter">Due</th><th scope="col" class="c-seam"><span class="bare-text">Due now</span></th><th scope="col" class="c-name"><span class="arrow" aria-hidden="true"></span>Organisation</th><th scope="col" class="c-stage">Stage</th><th scope="col" class="c-action">Next action</th><th scope="col" class="c-due">Due date<span class="order" aria-hidden="true"> ▲</span></th><th scope="col" class="c-last">Last activity</th><th scope="col" class="c-postcode">Postcode</th></tr></thead>',
     );
-    expect(lcd).toContain(
-      '<a href="/orgs/due-last-week" title="Due Last Week · Lead"><span class="arrow" aria-hidden="true"></span><span class="name">Due Last Week</span>',
-    );
-    // The LED of a row is lit when its next action is due today or
-    // overdue. It is in the bezel: after the link of the row, in its <li>.
+    const groups = [
+      ...band.matchAll(
+        /<tbody><tr><th scope="rowgroup" rowSpan="(\d+)" class="c-gutter"><span class="group">([^<]+)<\/span> <span class="count">(\d+)<\/span>/gi,
+      ),
+    ].map((m) => `${m[2]} ${m[3]}`);
+    expect(groups).toEqual([
+      'Overdue 1',
+      'Today 1',
+      'Next 7 days 1',
+      'Later 1',
+      'None 1',
+    ]);
+    // The LED of a row is on the seam: lit when its next action is due
+    // today or overdue. The seam says the same in text.
     const led = (slug: string) =>
-      new RegExp(
-        `<li><a href="/orgs/${slug}"[^>]*>.*?</a><span class="led( on)?" aria-hidden="true"></span></li>`,
-      ).exec(lcd)?.[1] === ' on';
-    expect(led('due-last-week')).toBe(true);
-    expect(led('due-today')).toBe(true);
-    expect(led('due-tomorrow')).toBe(false);
-    expect(led('no-date')).toBe(false);
-    // With no page styles, text tells each value and the due state.
-    const text = bodyText(lcd);
-    expect(text).toContain(
-      `Due Last Week · next action ${formatDate(dayFromToday(-7))} (7 days overdue) · stage Lead · last activity`,
+      /<td class="c-seam"><span class="(led(?: on)?)" aria-hidden="true"><\/span><span class="bare-text">(Yes|No)<\/span><\/td>/
+        .exec(rowOf(band, slug))
+        ?.slice(1)
+        .join(' ');
+    expect(led('due-last-week')).toBe('led on Yes');
+    expect(led('due-today')).toBe('led on Yes');
+    expect(led('due-tomorrow')).toBe('led No');
+    expect(led('no-date')).toBe('led No');
+    // No LED is on the paper of a row.
+    for (const slug of ['due-last-week', 'no-date']) {
+      expect(
+        rowOf(band, slug).replace(/<td class="c-seam">.*?<\/td>/, ''),
+      ).not.toMatch(/class="led/);
+    }
+    // Text tells each value. Overdue shows in the group name and in words.
+    // A row of Today shows only "today", because its group has one day.
+    expect(bodyText(rowOf(band, 'due-last-week'))).toBe(
+      `Overdue 1 Yes Due Last Week Lead Knock again ${formatDate(dayFromToday(-7))} · 7 days overdue ${formatDate(today())} None`,
     );
-    expect(text).toContain(
-      `Due Today · next action ${formatDate(dayFromToday(0))} (today) · stage Lead`,
+    expect(bodyText(rowOf(band, 'due-today'))).toBe(
+      `Today 1 Yes Due Today Lead Call today ${formatDate(today())} None`,
     );
-    expect(text).toContain(
-      `Due Tomorrow · next action ${formatDate(dayFromToday(1))} · stage Lead`,
+    expect(rowOf(band, 'due-today')).toContain(
+      `<td class="c-due"><time dateTime="${dayFromToday(0)}`,
     );
-    expect(text).toContain(
-      'No Date · next action None · stage Lead · last activity 2026-Jan-01',
+    expect(bodyText(rowOf(band, 'due-tomorrow'))).toBe(
+      `Next 7 days 1 No Due Tomorrow Lead Call ${formatDate(dayFromToday(1))} · tomorrow ${formatDate(today())} None`,
     );
+    expect(bodyText(rowOf(band, 'no-date'))).toBe(
+      'None 1 No No Date Lead None None 2026-Jan-01 E1 6AN',
+    );
+    // The glass reads the first organisation and the counts.
+    expect(bodyText(divOf(html, 'glass'))).toBe(
+      `First in list Due Last Week Knock again ${formatDate(dayFromToday(-7))} · 7 days overdue Overdue 1 Today 1 Showing 1–5 of 5`,
+    );
+    expect(divOf(html, 'glass')).toContain('<dd class="line mark">');
   });
 
   test('the default order: due and overdue first, the oldest due first, then the rest by last activity, the newest first', async () => {
@@ -256,38 +300,31 @@ describe('GET / and GET /orgs', () => {
       'Alpha',
       'Charlie',
     ]);
-    // No sort key is lit, and the module says the order.
+    // The Due key is lit, and the module says the order.
     const html = (await get('/')).body;
     expect(html).not.toMatch(/data-direction=/);
+    expect(html).toContain(
+      '<button type="submit" class="key latch" aria-pressed="true">Due<span class="latch-state" aria-hidden="true"> (current)</span></button>',
+    );
     expect(bodyText(html)).toContain('Sort Due first');
   });
 
   test('the last activity is the newest of the last visit, the last note and the added date', async () => {
     await addThree();
-    const text = bodyText(divOf((await get('/')).body, 'lcd'));
-    expect(text).toContain(
-      'Bravo · next action None · stage Lead · last activity 2026-Apr-01',
+    const band = bandOf((await get('/')).body);
+    expect(bodyText(rowOf(band, 'bravo'))).toEndWith(
+      'Bravo Lead None None 2026-Apr-01 None',
     );
-    expect(text).toContain(
-      'Alpha · next action None · stage Lead · last activity 2026-Mar-15',
+    expect(bodyText(rowOf(band, 'alpha'))).toBe(
+      'No Alpha Lead None None 2026-Mar-15 None',
     );
-    expect(text).toContain(
-      'Charlie · next action None · stage Lead · last activity 2026-Mar-01',
+    expect(bodyText(rowOf(band, 'charlie'))).toBe(
+      'No Charlie Lead None None 2026-Mar-01 None',
     );
   });
 
-  test('each sort orders the list, ascending and descending', async () => {
+  test('each sort orders the list in each group, ascending and descending', async () => {
     await addThree();
-    expect(await names('/?sort=activity&dir=asc')).toEqual([
-      'Charlie',
-      'Alpha',
-      'Bravo',
-    ]);
-    expect(await names('/?sort=activity&dir=desc')).toEqual([
-      'Bravo',
-      'Alpha',
-      'Charlie',
-    ]);
     expect(await names('/?sort=added&dir=asc')).toEqual([
       'Bravo',
       'Alpha',
@@ -310,84 +347,76 @@ describe('GET / and GET /orgs', () => {
     ]);
     // A sort that does not exist gives the default order.
     expect(await names('/?sort=nope&dir=desc')).toEqual(await names('/'));
+    expect(await names('/?sort=activity&dir=asc')).toEqual(await names('/'));
+    // The groups stay in their order: the sort sets the order in each
+    // group.
+    await addDue('Zulu Due', dayFromToday(-1));
+    await addDue('Able Later', dayFromToday(20));
+    expect(await names('/?sort=name&dir=asc')).toEqual([
+      'Zulu Due',
+      'Able Later',
+      'Alpha',
+      'Bravo',
+      'Charlie',
+    ]);
   });
 
   test('the Date added sort shows the date added in the place of the last activity', async () => {
     await addThree();
-    const lcd = divOf((await get('/?sort=added&dir=asc')).body, 'lcd');
-    expect(lcd).toContain('data-legend-status="▲ Date added"');
-    expect(bodyText(lcd)).toContain(
-      'Bravo · next action None · stage Lead · date added 2026-Jan-01',
+    const band = bandOf((await get('/?sort=added&dir=asc')).body);
+    expect(band).toContain(
+      '<th scope="col" class="c-last">Date added<span class="order" aria-hidden="true"> ▲</span></th>',
+    );
+    expect(bodyText(rowOf(band, 'bravo'))).toEndWith(
+      'Bravo Lead None None 2026-Jan-01 None',
     );
   });
 
-  test('the LCD legend shows the arrow of the order on the column that sets it, and text tells the order (REQ-CRM-LCD-001)', async () => {
+  test('the band legend shows the arrow of the order on the column that sets it, and text tells the order (REQ-CRM-LCD-002)', async () => {
     await addThree();
     const legends = async (url: string) => {
-      const lcd = divOf((await get(url)).body, 'lcd');
-      const ol = /<ol [^>]*>/.exec(lcd)?.[0] ?? '';
-      const attr = (name: string) =>
-        new RegExp(`${name}="([^"]*)"`).exec(ol)?.[1];
+      const html = (await get(url)).body;
+      const head = /<thead>.*?<\/thead>/.exec(bandOf(html))?.[0] ?? '';
       return {
-        name: attr('data-legend-name'),
-        arrow: attr('data-order-name'),
-        value: attr('data-legend-value'),
-        status: attr('data-legend-status'),
-        text: /<p class="bare-text">([^<]*)<\/p>/.exec(lcd)?.[1],
+        name: /class="c-name"><span class="arrow" aria-hidden="true">([^<]*)<\/span>/.exec(
+          head,
+        )?.[1],
+        others: [
+          ...head.matchAll(
+            /<th scope="col" class="(c-\w+)">([^<]+)<span class="order" aria-hidden="true">([^<]+)<\/span>/g,
+          ),
+        ].map((m) => `${m[1]} ${m[2]}${m[3]}`),
+        text: /<p class="info">([^<]*)<\/p>/.exec(html)?.[1],
       };
     };
     expect(await legends('/')).toEqual({
-      name: 'Organisation',
-      arrow: undefined,
-      value: '▲ Next action',
-      status: 'Last activity',
-      text: 'Sorted by next action, oldest first',
+      name: '',
+      others: ['c-due Due date ▲'],
+      text: 'Sorted by due date, oldest first',
     });
     expect(await legends('/?sort=name&dir=asc')).toEqual({
-      name: 'Organisation',
-      arrow: 'asc',
-      value: 'Next action',
-      status: 'Last activity',
-      text: 'Sorted by organisation name, A to Z',
+      name: '▲',
+      others: [],
+      text: 'In each group, sorted by name, A to Z',
     });
     expect(await legends('/?sort=name&dir=desc')).toEqual({
-      name: 'Organisation',
-      arrow: 'desc',
-      value: 'Next action',
-      status: 'Last activity',
-      text: 'Sorted by organisation name, Z to A',
-    });
-    expect(await legends('/?sort=activity&dir=asc')).toEqual({
-      name: 'Organisation',
-      arrow: undefined,
-      value: 'Next action',
-      status: '▲ Last activity',
-      text: 'Sorted by last activity, oldest first',
-    });
-    expect(await legends('/?sort=activity&dir=desc')).toEqual({
-      name: 'Organisation',
-      arrow: undefined,
-      value: 'Next action',
-      status: '▼ Last activity',
-      text: 'Sorted by last activity, newest first',
+      name: '▼',
+      others: [],
+      text: 'In each group, sorted by name, Z to A',
     });
     expect(await legends('/?sort=added&dir=asc')).toEqual({
-      name: 'Organisation',
-      arrow: undefined,
-      value: 'Next action',
-      status: '▲ Date added',
-      text: 'Sorted by date added, oldest first',
+      name: '',
+      others: ['c-last Date added ▲'],
+      text: 'In each group, sorted by date added, oldest first',
     });
     expect(await legends('/?sort=added&dir=desc')).toEqual({
-      name: 'Organisation',
-      arrow: undefined,
-      value: 'Next action',
-      status: '▼ Date added',
-      text: 'Sorted by date added, newest first',
+      name: '',
+      others: ['c-last Date added ▼'],
+      text: 'In each group, sorted by date added, newest first',
     });
     // The sort key says its name, and its direction with no page styles.
     expect(bodyText((await get('/?sort=name&dir=asc')).body)).toContain(
-      'Organisation name , A to Z',
+      'Name , A to Z',
     );
   });
 
@@ -403,34 +432,41 @@ describe('GET / and GET /orgs', () => {
       sort: 'added',
       dir: 'asc',
     });
+    // The Due key sets the default order.
+    expect(nextSort({ sort: 'added', dir: 'asc' }, '')).toEqual(none);
+    expect(nextSort(none, '')).toEqual(none);
   });
 
   test('each sort key is a GET form that keeps the search and the stage, with plain state text and an LED green for ascending and red for descending', async () => {
     const html = (await get('/?q=acme&stage=lead&sort=name&dir=asc')).body;
     // The lit key: the next press sorts descending.
     expect(html).toContain(
-      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Organisation name<span class="bare-text">, A to Z</span></button></form>`,
+      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Name<span class="bare-text">, A to Z</span></button></form>`,
     );
     // A key that is not lit: the next press sorts ascending by that key.
     expect(html).toContain(
       '<input type="hidden" name="sort" value="added"/><input type="hidden" name="dir" value="asc"/><button type="submit" class="key latch" aria-pressed="false">Date added</button>',
     );
     expect(bodyText(html)).toContain('Sort A to Z');
+    // The Due key keeps the search and the stage, and sets no sort.
+    expect(html).toContain(
+      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><input type="hidden" name="stage" value="lead"/><button type="submit" class="key latch" aria-pressed="false">Due</button></form>`,
+    );
 
     // The third press removes the sort: the form has no sort field.
     const desc = (await get('/?q=acme&sort=name&dir=desc')).body;
     expect(desc).toContain(
-      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><button type="submit" class="key latch" aria-pressed="true" data-direction="desc">Organisation name<span class="bare-text">, Z to A</span></button></form>`,
+      `${LIST_FORM}<input type="hidden" name="q" value="acme"/><button type="submit" class="key latch" aria-pressed="true" data-direction="desc">Name<span class="bare-text">, Z to A</span></button></form>`,
     );
     expect(bodyText(desc)).toContain('Sort Z to A');
-    const activity = (await get('/?sort=activity&dir=desc')).body;
-    expect(bodyText(activity)).toContain('Last activity , Newest first');
+    const added = (await get('/?sort=added&dir=desc')).body;
+    expect(bodyText(added)).toContain('Date added , Newest first');
   });
 
   test('the search and the stage keys are one GET form, which keeps the sort', async () => {
     const html = (await get('/?q=acme&stage=quoted&sort=added&dir=desc')).body;
     const start = html.indexOf(
-      `${LIST_FORM}<section class="module"><h2 class="label">Search</h2>`,
+      `${LIST_FORM}<section id="search" class="module span-3"><h2 class="label">Search</h2>`,
     );
     expect(start).toBeGreaterThan(-1);
     const form = html.slice(start, html.indexOf('</form>', start));
@@ -481,7 +517,7 @@ describe('GET / and GET /orgs', () => {
     );
   });
 
-  test(`shows ${PAGE_SIZE} rows on a page, with a pager in the footer`, async () => {
+  test(`shows ${PAGE_SIZE} rows on a page, with the pager on the plate`, async () => {
     const rows = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => {
       const n = String(i).padStart(2, '0');
       return `('id-${n}', 'org-${n}', 'Org ${n}', 'lead', '2026-01-01T10:00:${n}.000Z')`;
@@ -494,31 +530,43 @@ describe('GET / and GET /orgs', () => {
     expect(first).toHaveLength(PAGE_SIZE);
     expect(first[0]).toBe('Org 00');
     const html = (await get('/?sort=name&dir=asc')).body;
-    const foot = html.slice(html.indexOf('<footer'));
-    expect(foot).toContain(
-      `<span>1–${PAGE_SIZE} of ${PAGE_SIZE + 5}</span> <a href="/?sort=name&amp;dir=asc&amp;page=2" rel="next">next</a>`,
+    const plate = divOf(html, 'plate');
+    // Each key has its caption under it: the page that it opens, or why
+    // it is off (REQ-CRM-BUTTON-001).
+    expect(plate).toBe(
+      '<div class="plate"><div class="plate-key"><button type="button" class="key" id="page-prev" aria-describedby="page-prev-caption" disabled="" title="First page">Prev</button> <span class="caption" id="page-prev-caption">First page</span></div><div class="plate-key"><a class="key" id="page-next" href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" aria-describedby="page-next-caption">Next</a> <span class="caption" id="page-next-caption">Page 2 of 2</span></div></div>',
     );
-    expect(foot).not.toContain('rel="prev"');
-    expect(foot).toContain(
-      '<button type="button" class="link" id="page-previous" disabled="" title="This is the first page."',
+    expect(bodyText(divOf(html, 'glass'))).toContain(
+      `Showing 1–${PAGE_SIZE} of ${PAGE_SIZE + 5}`,
     );
+    // The pager is not in the footer.
+    expect(html.slice(html.indexOf('<footer'))).not.toContain('page-');
 
     const second = await names('/?sort=name&dir=asc&page=2');
     expect(second).toEqual(['Org 50', 'Org 51', 'Org 52', 'Org 53', 'Org 54']);
     const last = (await get('/?sort=name&dir=asc&page=2')).body;
-    expect(last).toContain(
-      `<a href="/?sort=name&amp;dir=asc" rel="prev">previous</a> <span>${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}</span>`,
+    expect(divOf(last, 'plate')).toContain(
+      '<a class="key" id="page-prev" href="/?sort=name&amp;dir=asc" rel="prev" aria-describedby="page-prev-caption">Prev</a> <span class="caption" id="page-prev-caption">Page 1 of 2</span>',
     );
     expect(last).not.toContain('rel="next"');
-    expect(last).toContain('id="page-next" disabled=""');
+    expect(last).toContain(
+      'id="page-next" aria-describedby="page-next-caption" disabled=""',
+    );
+    expect(bodyText(divOf(last, 'glass'))).toContain(
+      `Showing ${PAGE_SIZE + 1}–${PAGE_SIZE + 5} of ${PAGE_SIZE + 5}`,
+    );
     // A page after the last page shows the last page.
     expect(await names('/?sort=name&dir=asc&page=9')).toEqual(second);
     // A short list has the pager too, with both keys off.
     const short = (await get('/?q=Org%2000')).body;
     expect(short).not.toContain('rel="next"');
-    expect(short).toContain('id="page-previous" disabled=""');
-    expect(short).toContain('<span>1–1 of 1</span>');
-    expect(short).toContain('id="page-next" disabled=""');
+    expect(short).toContain(
+      'id="page-prev" aria-describedby="page-prev-caption" disabled=""',
+    );
+    expect(bodyText(divOf(short, 'glass'))).toContain('Showing 1–1 of 1');
+    expect(short).toContain(
+      'id="page-next" aria-describedby="page-next-caption" disabled=""',
+    );
   });
 
   test('each key of the list is a plain form or link, and the search field has an id (REQ-CRM-MORPH-001)', async () => {
@@ -540,13 +588,15 @@ describe('GET / and GET /orgs', () => {
       'action="/" method="get"',
       'action="/" method="get"',
       'action="/" method="get"',
-      'action="/orgs/new" method="get"',
     ]);
-    expect(html).toContain('rel="prev">previous</a>');
+    expect(html).toContain(
+      'rel="prev" aria-describedby="page-prev-caption">Prev</a>',
+    );
+    expect(html).toContain('<a class="key" href="/orgs/new">New lead</a>');
     // With an id, the morph keeps the same field, with its focus and its
     // caret. With no search, it has no autofocus.
     expect(html).toContain(
-      '<section class="module"><h2 class="label">Search</h2><div class="search"><label class="field"><span class="bare-text">Name or postcode </span><input id="q" type="search" placeholder="Name or postcode" name="q" value=""/></label><span id="search-send" class="send">',
+      '<section id="search" class="module span-3"><h2 class="label">Search</h2><div class="search"><label class="field"><span class="bare-text">Name or postcode </span><input id="q" type="search" placeholder="Name or postcode" name="q" value=""/></label><span id="search-send" class="send">',
     );
   });
 
@@ -578,10 +628,9 @@ describe('last activity', () => {
 
   /** The last activity of the row of `slug` in the list, as its ISO value. */
   const lastActivity = async (slug: string) => {
-    const html = (await get('/?sort=activity&dir=desc')).body;
-    const start = html.indexOf(`<a href="/orgs/${slug}"`);
-    const row = html.slice(start, html.indexOf('</a>', start));
-    return [...row.matchAll(/dateTime="([^"]+)"/g)].at(-1)?.[1];
+    const html = (await get('/')).body;
+    const cell = /<td class="c-last">(.*?)<\/td>/.exec(rowOf(html, slug))?.[1];
+    return /dateTime="([^"]+)"/.exec(cell ?? '')?.[1];
   };
 
   /** Tap the Undo key of the organisation page of `slug`. */
@@ -683,10 +732,10 @@ describe('the page anatomy', () => {
     expect(account).toContain('<a href="/orgs">orgs</a>');
   });
 
-  test('the footer has the pager, privacy and top, and no theme or mode stepper', async () => {
+  test('the footer has privacy and top, and no theme or mode stepper', async () => {
     const html = (await get('/')).body;
     expect(html).toContain(
-      '<span>0 of 0</span> <button type="button" class="link" id="page-next" disabled="" title="This is the last page." aria-describedby="page-next-why">next</button> <span class="bare-text" id="page-next-why">This is the last page.</span> <a href="/privacy">privacy</a> <a href="#top">top</a></nav></footer>',
+      '<footer class="foot"><nav class="foot-links" aria-label="Page"><a href="/privacy">privacy</a> <a href="#top">top</a></nav></footer>',
     );
     expect(html).toContain('<html lang="en">');
     expect(html).toContain('<meta name="color-scheme" content="light dark"/>');
@@ -775,11 +824,12 @@ describe('every page with ?theme=bare', () => {
       }
     }
 
-    // Home: text carries each value and the due state.
+    // Home: text carries each value and the due state, in a real table.
     expect(bodyText(bare['/'])).toContain(
-      'Acme Plumbing · next action 2000-Jan-01 (',
+      'Overdue 1 Yes Acme Plumbing Quoted Chase quote 2000-Jan-01 · ',
     );
-    expect(bodyText(bare['/'])).toContain('days overdue) · stage Quoted');
+    expect(bodyText(bare['/'])).toContain('days overdue');
+    expect(bare['/']).toContain('<th scope="rowgroup"');
 
     // Home with a search, a stage and a sort: attributes carry the search,
     // and text carries the stage and the sort direction.
@@ -788,8 +838,8 @@ describe('every page with ?theme=bare', () => {
       '<input id="q" type="search" placeholder="Name or postcode" autofocus="" name="q" value="acme"/>',
     );
     expect(bodyText(search)).toContain('Quoted (current)');
-    expect(bodyText(search)).toContain('Organisation name , Z to A');
-    expect(bodyText(search)).toContain('Sorted by organisation name, Z to A');
+    expect(bodyText(search)).toContain('Name , Z to A');
+    expect(bodyText(search)).toContain('In each group, sorted by name, Z to A');
     expect(bodyText(search)).toContain('All Lead Visited');
 
     // /orgs/new: an attribute marks the field that the form needs.

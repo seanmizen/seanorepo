@@ -25,8 +25,9 @@ that sometimes shows.
   screen reader reads it, and the bare theme (REQ-CRM-BARE-001) shows it
   after the button. `ui/Key.tsx` holds the rule: a key with `off` (the
   reason) is off. The buttons that can be off are `Undo`, `Redo` and
-  `Show hidden` (Activity box), `previous` and `next` (the pager of the
-  list), `Everywhere else` and the `Revoke` of this session
+  `Show hidden` (Activity box), `Prev` and `Next` (the pager of the list,
+  on the plate of the display unit, where the caption under each key is
+  its reason), `Everywhere else` and the `Revoke` of this session
   (`/account/sessions`), `Reset demo data` (`/account`), `Add a passkey`
   (`/account/passkeys` and the 403 page), `Delete` (`/account/passkeys`),
   `Sign in with a passkey`, `Sign in` (`/login/verify`), `Start recovery`

@@ -16,12 +16,12 @@
  * /orgs) has a second page. Then Playwright (from the repo node_modules)
  * takes each page in light and dark mode at these widths: the breakpoint
  * minus 1px, the breakpoint, the breakpoint plus 24px, 390px, 1200px and
- * 1440px (REQ-CRM-LAYOUT-001). The script reads the breakpoint from
+ * 1440px (REQ-CRM-LAYOUT-002). The script reads the breakpoint from
  * crm-fe/src/theme.css. It takes each sort and filter of the list at
  * 1200px in light mode and at 390px in dark mode, and a few pages with
  * ?theme=bare. "org-hidden-not-shown" and "org-hidden-shown" have a hidden
- * visit and a hidden contact (Undo, Redo and Show hidden). "public-home" and "privacy" are signed out. "home-hover" has the pointer on a menu row: compare it with
- * "home" to see that no character moves (REQ-CRM-LCD-001). The script
+ * visit and a hidden contact (Undo, Redo and Show hidden). "public-home" and "privacy" are signed out. "home-hover" has the pointer on a band row: compare it with
+ * "home" to see that no character moves (REQ-CRM-LCD-002). The script
  * prints each page that scrolls sideways. At the end it stops crm-be and
  * deletes the database.
  */
@@ -381,8 +381,8 @@ try {
     ['home-search', '/?q=street&stage=visited'],
     // /orgs is the same list as /.
     ['orgs', '/orgs?sort=name&dir=asc'],
-    // The pointer on the second row of the menu.
-    ['home-hover', '/', ['hover', '.menu li:nth-child(2) a']],
+    // The pointer on the second row of the band.
+    ['home-hover', '/', ['hover', '.chart tbody tr:nth-child(2) th a']],
     ['org', '/orgs/example-plumbing'],
     // The Activity list, open.
     ['org-activity', '/orgs/example-plumbing', ['click', 'summary']],
@@ -424,8 +424,6 @@ try {
   // Each sort of the list, ascending and descending, and the filters
   // with a sort.
   const homeStates = [
-    ['home-activity-asc', '/?sort=activity&dir=asc'],
-    ['home-activity-desc', '/?sort=activity&dir=desc'],
     ['home-added-asc', '/?sort=added&dir=asc'],
     ['home-added-desc', '/?sort=added&dir=desc'],
     ['home-name-asc', '/?sort=name&dir=asc'],

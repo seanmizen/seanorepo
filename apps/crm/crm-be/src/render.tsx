@@ -66,7 +66,21 @@ export interface PageParts {
   title: string;
   /** At most one sentence under the nav. */
   intro?: ReactNode;
-  /** The core function of the page: one `Device`, in the left column. */
+  /**
+   * The device of a page on the rack layout (REQ-CRM-LAYOUT-002): one
+   * `Rack`, at the full width of the page.
+   */
+  rack?: ReactNode;
+  /**
+   * The data of a page on the rack layout: one or more `Band`s, under the
+   * rack, at the full width of the page.
+   */
+  band?: ReactNode;
+  /**
+   * The core function of a page on the old layout (REQ-CRM-LAYOUT-001):
+   * one `Device`, in the left column. Each page moves to `rack` in its own
+   * change.
+   */
   device?: ReactNode;
   /**
    * Plain text at the top of the right column: help, and links that are
@@ -75,8 +89,6 @@ export interface PageParts {
   help?: ReactNode;
   /** The data of the page: each section in a `Box`, in the right column. */
   boxes?: ReactNode;
-  /** The pagination of a long list, in the footer. */
-  pager?: ReactNode;
   /** The crm-fe entries that the page adds to `main`. */
   entries?: Entry[];
 }
@@ -88,15 +100,16 @@ export interface PageParts {
  * 1. The nav (`ui/SiteNav.tsx`): the path title, then the app links for a
  *    signed-in person. The title is the first element in `<body>`.
  * 2. The intro: at most one sentence.
- * 3. The device (the core function): the left column (`.device-col`).
- * 4. The help and the boxes (the data): the right column (`.data-col`).
- *    The boxes are on one chassis (`.boxes`).
- * 5. The footer (`ui/Footer.tsx`): `top` and the pager.
+ * 3. On the rack layout (REQ-CRM-LAYOUT-002): the rack (the device), then
+ *    the band (the data), each at the full width of the page.
+ * 4. On the old layout (REQ-CRM-LAYOUT-001): the device in the left
+ *    column (`.device-col`), and the help and the boxes in the right
+ *    column (`.data-col`).
+ * 5. The footer (`ui/Footer.tsx`): `privacy` and `top`.
  *
- * The layout has one breakpoint (REQ-CRM-LAYOUT-001, in
- * `crm-fe/src/theme.css`). On a wide screen the columns are 40% and 60%
- * of the page, and the app links move to the footer row. On a narrow
- * screen it is one column, in the order of the HTML.
+ * The layout has one width breakpoint, in `crm-fe/src/theme.css`. On a
+ * wide screen the app links move to the footer row. On a narrow screen
+ * the page is one column, in the order of the HTML.
  *
  * The `<head>` has the asset tags of the `main` entry and of `entries` from
  * the Rsbuild manifest. With `?theme=bare` it has no asset tags. The color
@@ -104,7 +117,7 @@ export interface PageParts {
  */
 export const renderPage = (
   request: FastifyRequest,
-  { title, intro, device, help, boxes, pager, entries = [] }: PageParts,
+  { title, intro, rack, band, device, help, boxes, entries = [] }: PageParts,
 ): string => {
   const { js, css } =
     themeOf(request) === 'bare' ? { js: [], css: [] } : readAssets(entries);
@@ -130,6 +143,8 @@ export const renderPage = (
         />
         <main>
           {intro && <p className="intro">{intro}</p>}
+          {rack}
+          {band}
           {(device || help || boxes) && (
             <div className="body">
               {device && <div className="device-col">{device}</div>}
@@ -142,7 +157,7 @@ export const renderPage = (
             </div>
           )}
         </main>
-        <Footer pager={pager} />
+        <Footer />
       </body>
     </html>,
   )}`;
