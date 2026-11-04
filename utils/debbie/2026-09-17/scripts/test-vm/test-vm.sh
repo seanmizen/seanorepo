@@ -563,7 +563,9 @@ do_assert() {
     # IdentitiesOnly: ssh offers only $KEY. Without it, ssh offers each key in
     # the ssh-agent first. With five or more agent keys, sshd stops the
     # connection ("Too many authentication failures") before ssh offers $KEY.
-    local common_opts=(-i "$KEY" -o IdentitiesOnly=yes
+    # AddKeysToAgent=no: each run makes a new $KEY. A user ssh config with
+    # `AddKeysToAgent yes` adds each one to the ssh-agent, and the keys collect.
+    local common_opts=(-i "$KEY" -o IdentitiesOnly=yes -o AddKeysToAgent=no
         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
         -o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes)
     local ssh_opts=(-p "$SSH_PORT" "${common_opts[@]}")
