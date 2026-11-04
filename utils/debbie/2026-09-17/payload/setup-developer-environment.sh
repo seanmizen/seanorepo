@@ -575,8 +575,10 @@ if [ "$(id -u)" -ne 0 ]; then
 # Managed by utils/debbie/2026-09-17/payload/setup-developer-environment.sh.
 # Rewritten whole on every run. Put your own hosts in ~/.ssh/config.
 
-# The home servers. provision.sh installs this key on them.
-Host asus.local surface.local
+# The home servers. provision.sh installs this key on them. Each has two
+# names: NAME.local on the LAN (mDNS), and NAME from away, through the
+# tailnet's MagicDNS (REQ-NETWORK-006).
+Host asus asus.local minix minix.local surface surface.local
   User srv
   IdentityFile ~/.ssh/seanorepo-admin
 
