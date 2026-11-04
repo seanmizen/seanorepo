@@ -54,7 +54,7 @@ screen gets.
 
 - **Status:** active
 - **Source:** sean
-- **Origin:** #1116, #1122
+- **Origin:** #1116, #1122, #1125
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The crm theme shall lay out each page as the rack over the
@@ -71,8 +71,10 @@ screen gets.
   the top left, and the line of nav links is in the footer row. Below the
   width breakpoint (narrow), the page is one column in the order of the
   HTML: the ears go, each module has the full width, each band row folds
-  to two lines, and the outer page margin is 1px. No row of the page wraps
-  at a width that its content sets.
+  to two lines, and the outer page margin is 1px. On a page with the mode
+  keys (Plan, Work and Review on the plate), the line of nav links shows
+  over the footer at each width, because the mode keys are the way between
+  the views. No row of the page wraps at a width that its content sets.
 - **Exception:** A page that `renderPage` gets with a `device` part, and
   not a `rack` part, keeps the 40/60 grid of REQ-CRM-LAYOUT-001: the device
   in the left column and the boxes in the right column. Each page moves to

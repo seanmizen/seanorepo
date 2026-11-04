@@ -385,6 +385,10 @@ try {
     // The pointer on the second row of the band.
     ['home-hover', '/', ['hover', '.chart tbody tr:nth-child(2) th a']],
     ['org', '/orgs/example-plumbing'],
+    // An organisation in the running order of the address book, Z to A.
+    ['org-order', '/orgs/example-plumbing?list=orgs&sort=name&dir=desc&at=2'],
+    // Review: logged today and still due.
+    ['review', '/review'],
     // The Activity list, open.
     ['org-activity', '/orgs/example-plumbing', ['click', 'summary']],
     // Hidden records: not shown, then shown (Show hidden).

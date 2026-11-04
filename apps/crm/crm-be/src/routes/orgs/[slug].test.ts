@@ -197,14 +197,20 @@ describe('GET /orgs/<slug>', () => {
 
   test('Undo and Redo are on the plate, and each caption names the change', async () => {
     await post(`/orgs/${slug}/activity`, { outcome: 'spoke', note: '' });
-    let plate = divOf((await get(`/orgs/${slug}`)).body, 'plate');
-    expect(bodyText(`<body>${plate}`)).toBe(
+    let plate = divOf(
+      divOf((await get(`/orgs/${slug}`)).body, 'plate'),
+      'plate-row',
+    );
+    expect(bodyText(`<body>${plate}`).replace(/ Prev .*$/, '')).toBe(
       'Undo Undo: Visit 1 Redo Nothing to redo. A new change clears the redo list.',
     );
     const event = plate.match(/name="event" value="(\d+)"/)?.[1] ?? '';
     await post(`/orgs/${slug}/undo`, { event });
-    plate = divOf((await get(`/orgs/${slug}`)).body, 'plate');
-    expect(bodyText(`<body>${plate}`)).toBe(
+    plate = divOf(
+      divOf((await get(`/orgs/${slug}`)).body, 'plate'),
+      'plate-row',
+    );
+    expect(bodyText(`<body>${plate}`).replace(/ Prev .*$/, '')).toBe(
       'Undo Nothing to undo. Redo Redo: Visit 1',
     );
   });

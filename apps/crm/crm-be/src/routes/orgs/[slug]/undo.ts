@@ -61,7 +61,7 @@ export const undoRedoRoute =
             )
             .get(org.id)?.slug ?? org.slug;
         return reply.redirect(
-          activityBack(slug, formText(request.body?.hidden) === '1'),
+          activityBack(slug, formText(request.body?.hidden) === '1', request),
           303,
         );
       },

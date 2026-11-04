@@ -189,5 +189,10 @@ describe('the layout (REQ-CRM-LAYOUT-002)', () => {
     expect(THEME).toMatch(
       /@media \(width >= 960px\) \{\s*body > \.links \{\s*order: 1;/,
     );
+    // On a narrow screen too, on a page with the mode keys.
+    expect(html).toContain('<nav class="plate-row modes" aria-label="Mode">');
+    expect(THEME).toMatch(
+      /body:has\(\.plate > \.modes\) > \.links \{\s*order: 1;/,
+    );
   });
 });

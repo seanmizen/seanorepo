@@ -4,8 +4,8 @@ import type { Auth } from '../../../auth';
 import { addContact } from '../../../contacts';
 import { contactForm } from '../../../forms/contact';
 import { parseForm } from '../../../forms/form';
-import { findOrg, orgPath } from '../../../org';
-import { sendNotFound, sendOrgPage } from '../[slug]';
+import { findOrg } from '../../../org';
+import { orderBack, sendNotFound, sendOrgPage } from '../[slug]';
 
 /**
  * `POST /<slug>/contacts`: the Add contact row of the Contacts band. On an
@@ -22,7 +22,7 @@ export const orgContactsRoute = (app: FastifyInstance, db: Database) => {
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 
@@ -49,7 +49,7 @@ export const orgContactsRoute = (app: FastifyInstance, db: Database) => {
           contact: values,
         });
       }
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 };

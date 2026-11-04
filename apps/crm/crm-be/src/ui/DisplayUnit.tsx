@@ -52,6 +52,12 @@ export interface PlateKey {
   /** The `rel` of a link, for example `prev` or `next`. */
   rel?: string;
   /**
+   * True: the key is a latching link that is on, for example the mode key
+   * of the mode of the page. Its LED is lit, and it has `aria-current`.
+   * False: a latching link that is off. Leave it out for a plain key.
+   */
+  on?: boolean;
+  /**
    * The id of a form of the page that the key submits, for example the
    * form of the control unit. The key is a submit button with a `form`
    * attribute, so the form needs no second key.
@@ -76,6 +82,7 @@ const PlateControl = ({
   off,
   href,
   rel,
+  on,
   formId,
   form,
 }: PlateKey) => {
@@ -90,13 +97,19 @@ const PlateControl = ({
   if (href) {
     return (
       <a
-        className="key"
+        className={on === undefined ? 'key' : 'key latch'}
         id={id}
         href={href}
         rel={rel}
+        aria-current={on ? 'true' : undefined}
         aria-describedby={captionId}
       >
         {label}
+        {on && (
+          <span className="latch-state" aria-hidden="true">
+            {' (current)'}
+          </span>
+        )}
       </a>
     );
   }
@@ -119,6 +132,17 @@ const PlateControl = ({
   );
 };
 
+/** One row of plate keys, each with its caption under it. */
+const PlateRow = ({ keys }: { keys: PlateKey[] }) =>
+  keys.map((key) => (
+    <div key={key.id} className="plate-key">
+      <PlateControl {...key} />{' '}
+      <span className="caption" id={`${key.id}-caption`}>
+        {key.caption}
+      </span>
+    </div>
+  ));
+
 /**
  * The display unit: the first unit of the rack. It is the glass as one
  * wide strip of readings, with the plate keys at its right
@@ -136,6 +160,10 @@ const PlateControl = ({
  *   value, with faint rules between the readings. Each value and each line
  *   is one line high: a text that does not fit ends in an ellipsis.
  * - `keys`: the plate keys, each with a caption under it.
+ * - `modes`: the mode keys (`modeKeys` in `modes.ts`): Plan, Work and
+ *   Review, a row of latching links over the `keys`, in a
+ *   `<nav aria-label="Mode">`. They replace the nav links as the way
+ *   between the views (`apps/crm/docs/002-rack.md`, decision 1).
  *
  * The rules of the glass (REQ-CRM-LCD-002): no LED is inside the glass, and
  * the blinking ink mark is the only mark in it. LEDs are on metal only: the
@@ -148,11 +176,13 @@ export const DisplayUnit = ({
   saved,
   readings,
   keys = [],
+  modes = [],
 }: {
   alert?: string | null;
   saved?: ReactNode;
   readings: Reading[];
   keys?: PlateKey[];
+  modes?: PlateKey[];
 }) => (
   <Unit kind="display">
     <div className="faceplate">
@@ -185,16 +215,18 @@ export const DisplayUnit = ({
           ))}
         </dl>
       </div>
-      {keys.length > 0 && (
+      {(keys.length > 0 || modes.length > 0) && (
         <div className="plate">
-          {keys.map((key) => (
-            <div key={key.id} className="plate-key">
-              <PlateControl {...key} />{' '}
-              <span className="caption" id={`${key.id}-caption`}>
-                {key.caption}
-              </span>
+          {modes.length > 0 && (
+            <nav className="plate-row modes" aria-label="Mode">
+              <PlateRow keys={modes} />
+            </nav>
+          )}
+          {keys.length > 0 && (
+            <div className="plate-row">
+              <PlateRow keys={keys} />
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

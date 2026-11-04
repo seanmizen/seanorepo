@@ -135,7 +135,8 @@ const bandOf = (html: string) => {
 
 /** The row of the organisation `slug` in the band. */
 const rowOf = (html: string, slug: string) => {
-  const link = html.indexOf(`<a href="/orgs/${slug}">`);
+  // The link carries the running order: `/orgs/<slug>?at=2`.
+  const link = html.search(new RegExp(`<a href="/orgs/${slug}[?"]`));
   const start = html.lastIndexOf('<tr>', link);
   return html.slice(start, html.indexOf('</tr>', link) + '</tr>'.length);
 };
@@ -545,9 +546,10 @@ describe('GET / and GET /orgs', () => {
     const html = (await get('/?sort=name&dir=asc')).body;
     const plate = divOf(html, 'plate');
     // Each key has its caption under it: the page that it opens, or why
-    // it is off (REQ-CRM-BUTTON-001).
-    expect(plate).toBe(
-      '<div class="plate"><div class="plate-key"><button type="button" class="key" id="page-prev" aria-describedby="page-prev-caption" disabled="" title="First page">Prev</button> <span class="caption" id="page-prev-caption">First page</span></div><div class="plate-key"><a class="key" id="page-next" href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" aria-describedby="page-next-caption">Next</a> <span class="caption" id="page-next-caption">Page 2 of 2</span></div></div>',
+    // it is off (REQ-CRM-BUTTON-001). Start opens the first organisation
+    // of the list, in its running order.
+    expect(divOf(plate, 'plate-row')).toBe(
+      '<div class="plate-row"><div class="plate-key"><button type="button" class="key" id="page-prev" aria-describedby="page-prev-caption" disabled="" title="First page">Prev</button> <span class="caption" id="page-prev-caption">First page</span></div><div class="plate-key"><a class="key" id="page-next" href="/?sort=name&amp;dir=asc&amp;page=2" rel="next" aria-describedby="page-next-caption">Next</a> <span class="caption" id="page-next-caption">Page 2 of 2</span></div><div class="plate-key"><a class="key" id="start" href="/orgs/org-00?sort=name&amp;dir=asc&amp;at=1" aria-describedby="start-caption">Start</a> <span class="caption" id="start-caption">Org 00</span></div></div>',
     );
     expect(bodyText(divOf(html, 'glass'))).toContain(
       `Showing 1–${PAGE_SIZE} of ${PAGE_SIZE + 5}`,

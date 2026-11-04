@@ -33,7 +33,7 @@ export const orgContactRestoreRoute = (app: FastifyInstance, db: Database) => {
         return sendNotFound(request, reply);
       }
       return reply.redirect(
-        activityBack(org.slug, formText(request.body?.hidden) === '1'),
+        activityBack(org.slug, formText(request.body?.hidden) === '1', request),
         303,
       );
     },

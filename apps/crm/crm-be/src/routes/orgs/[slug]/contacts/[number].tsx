@@ -20,7 +20,8 @@ import { ControlUnit } from '../../../../ui/ControlUnit';
 import { DisplayUnit } from '../../../../ui/DisplayUnit';
 import { Rack } from '../../../../ui/Rack';
 import { RecordForm } from '../../../../ui/RecordForm';
-import { sendNotFound } from '../../[slug]';
+import { orderSearch, parseOrder } from '../../../index';
+import { orderBack, sendNotFound } from '../../[slug]';
 
 /** The id of the form of the edit page. The Save key on the plate submits it. */
 const FORM_ID = 'contact-edit';
@@ -44,6 +45,7 @@ export const contactEditPage = ({
   values,
   error,
   problem,
+  search = '',
 }: {
   org: Org;
   contact: Contact;
@@ -51,6 +53,12 @@ export const contactEditPage = ({
   values?: FormValues;
   error?: string;
   problem?: FieldProblem;
+  /**
+   * The query string of the running order of the organisation page
+   * (`orderSearch`). The form posts with it, and Save and Cancel go back
+   * to the organisation page in the same order.
+   */
+  search?: string;
 }): PageParts => ({
   title: `${contact.name || 'Contact'} - ${org.name}`,
   intro:
@@ -86,7 +94,7 @@ export const contactEditPage = ({
             id: 'cancel',
             label: 'Cancel',
             caption: 'Back to the org',
-            href: orgPath(org.slug),
+            href: `${orgPath(org.slug)}${search}`,
           },
         ]}
       />
@@ -94,7 +102,7 @@ export const contactEditPage = ({
         <form
           id={FORM_ID}
           method="post"
-          action={contactPath(org.slug, contact.number)}
+          action={`${contactPath(org.slug, contact.number)}${search}`}
         >
           <RecordForm
             span={12}
@@ -151,6 +159,7 @@ export const orgContactEditRoute = (app: FastifyInstance, db: Database) => {
             org,
             contact,
             others: otherOrgs(db, contact.id, org.id),
+            search: orderSearch(parseOrder(request.query)),
             ...failed,
           }),
         ),
@@ -198,7 +207,7 @@ export const orgContactEditRoute = (app: FastifyInstance, db: Database) => {
           problem: problem ?? { field: 'email', word: 'in use' },
         });
       }
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 };

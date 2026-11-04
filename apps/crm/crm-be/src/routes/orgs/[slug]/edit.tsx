@@ -21,7 +21,8 @@ import { ControlUnit } from '../../../ui/ControlUnit';
 import { DisplayUnit } from '../../../ui/DisplayUnit';
 import { Rack } from '../../../ui/Rack';
 import { RecordForm } from '../../../ui/RecordForm';
-import { orgReadings, sendNotFound } from '../[slug]';
+import { orderSearch, parseOrder } from '../../index';
+import { orderBack, orgReadings, sendNotFound } from '../[slug]';
 
 /** The id of the form of the edit page. The Save key on the plate submits it. */
 const FORM_ID = 'org-edit';
@@ -43,6 +44,7 @@ export const orgEditPage = ({
   values,
   error,
   problem,
+  search = '',
 }: {
   org: Org;
   contacts: Contact[];
@@ -50,6 +52,12 @@ export const orgEditPage = ({
   values?: FormValues;
   error?: string;
   problem?: FieldProblem;
+  /**
+   * The query string of the running order of the organisation page
+   * (`orderSearch`). The form posts with it, and Save and Cancel go back
+   * to the organisation page in the same order.
+   */
+  search?: string;
 }): PageParts => ({
   title: `Edit ${org.name}`,
   intro:
@@ -65,12 +73,16 @@ export const orgEditPage = ({
             id: 'cancel',
             label: 'Cancel',
             caption: 'Back to the org',
-            href: orgPath(org.slug),
+            href: `${orgPath(org.slug)}${search}`,
           },
         ]}
       />
       <ControlUnit>
-        <form id={FORM_ID} method="post" action={orgPath(org.slug, 'edit')}>
+        <form
+          id={FORM_ID}
+          method="post"
+          action={`${orgPath(org.slug, 'edit')}${search}`}
+        >
           <RecordForm
             form={organisationForm}
             problem={problem}
@@ -152,7 +164,10 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
     request: FastifyRequest,
     reply: FastifyReply,
-    props: Omit<Parameters<typeof orgEditPage>[0], 'contacts' | 'activity'>,
+    props: Omit<
+      Parameters<typeof orgEditPage>[0],
+      'contacts' | 'activity' | 'search'
+    >,
   ) =>
     reply
       .code(props.error ? 400 : 200)
@@ -162,6 +177,7 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
           request,
           orgEditPage({
             ...props,
+            search: orderSearch(parseOrder(request.query)),
             contacts: listContacts(db, props.org.id),
             activity: readActivity(db, props.org.id),
           }),
@@ -191,7 +207,7 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
         request.body,
       );
       if ('error' in saved) return send(request, reply, { org, ...saved });
-      return reply.redirect(orgPath(saved.slug), 303);
+      return reply.redirect(orderBack(saved.slug, request), 303);
     },
   );
 };

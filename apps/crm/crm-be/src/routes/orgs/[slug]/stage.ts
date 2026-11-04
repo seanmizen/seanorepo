@@ -1,8 +1,8 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { Auth } from '../../../auth';
-import { findOrg, orgPath, parsePipeline, setPipeline } from '../../../org';
-import { sendNotFound, sendOrgPage } from '../[slug]';
+import { findOrg, parsePipeline, setPipeline } from '../../../org';
+import { orderBack, sendNotFound, sendOrgPage } from '../[slug]';
 
 /**
  * `POST /<slug>/stage`. Set the stage, the next action and its date
@@ -34,7 +34,7 @@ export const orgStageRoute = (app: FastifyInstance, db: Database) => {
       db.transaction(() =>
         setPipeline(db, (request.auth as Auth).personId, org, parsed.pipeline),
       )();
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 };

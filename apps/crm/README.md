@@ -8,8 +8,9 @@ billing. After sign-in, the seller has these pages:
   date (`routes/index.tsx`). The page is a rack over a band:
   - The glass reads the first organisation of the list (its name, its next
     action and its due date), the counts of Overdue and Today, and the
-    rows that show. The plate keys are the pager: `Prev` and `Next`, 50
-    rows to a page.
+    rows that show. The plate keys are the mode keys (see
+    [Modes and the running order](#modes-and-the-running-order)), then the
+    pager (`Prev` and `Next`, 50 rows to a page) and `Start`.
   - The control unit: Search (name or postcode, and `New lead`), Stage
     (`All` and one key for each stage) and Sort. The sort keys are `Due`
     (the default), `Date added` and `Name`. `Date added` and `Name` sort
@@ -26,7 +27,8 @@ billing. After sign-in, the seller has these pages:
     shows only the word `today`, because its group has one day. The LED of
     a row, on the seam at its left, is lit when the next action is due.
 
-  The URL holds the state: `?q=&stage=&sort=&dir=&page=`. With JavaScript,
+  The URL holds the state: `?q=&stage=&sort=&dir=&page=`. Each row links
+  the organisation in the running order of the list. With JavaScript,
   each key updates the page in place, and the focus stays where it was
   (see [Page rules](#page-rules)).
 - `/orgs`: the address book. The same handler, rack and keys as the Plan,
@@ -46,8 +48,10 @@ billing. After sign-in, the seller has these pages:
   - The glass reads the name (the one large value) and the address, the
     next action and its due date, the stage, the last visit and the first
     contact. Its first line is the error of the last post, or else the
-    last save. The plate keys are `Undo` and `Redo`. Each caption names
-    the change that the key acts on (`Undo: Visit 3`), or why it is off.
+    last save. The plate keys are the mode keys, then `Undo` and `Redo`,
+    then `Prev` and `Next` (the running order). Each caption names the
+    change or the organisation that the key acts on (`Undo: Visit 3`), or
+    why it is off (`Last in list`).
   - The control unit holds three modules in one row. **Log**: the
     `Visit note` field, then the `Save as visit` keys. `No answer`,
     `Spoke`, `Call back` (`then due`), `Not interested` and `Do not knock`
@@ -73,6 +77,45 @@ billing. After sign-in, the seller has these pages:
   and `Cancel`. `/orgs/<slug>/activity/<number>`: the edit page of a visit
   or a note, with the Log module filled in. Its LCD shows its `Type`:
   `Note`, or `Visit, <outcome>`.
+
+- `/review`: Review, the evening view. The glass reads the day, the
+  visits and the notes logged today, and the counts of Overdue and Due
+  today. The bands: **Logged today** (each visit and note of today, the
+  newest first, with its organisation) and **Still due** (the Overdue and
+  Today groups of the Plan, in its order). It has no control unit.
+
+### Modes and the running order
+
+The design is in `apps/crm/docs/002-rack.md` (decisions 1 to 3).
+
+- **Mode keys.** `Plan`, `Work` and `Review` are latching keys on the plate
+  of `/`, `/orgs`, `/orgs/<slug>` and `/review` (`modeKeys` in
+  `crm-be/src/modes.ts`). The key of the mode of the page is on. `Plan`
+  opens `/` (caption: the number due now). `Work` opens the first
+  organisation of the running order of the page (caption: `4 of 10` on an
+  organisation page, else the number in the list). `Review` opens
+  `/review` (caption: the number logged today). The address book is in no
+  mode. On a page with the mode keys, the nav links show over the footer
+  at each width. The edit pages and the new lead keep `Save` and `Cancel`
+  only.
+- **Running order.** The order of a list carries into the organisation
+  pages. There is no round record and no new table: the URL of the
+  organisation page holds the list query and the place in the list, for
+  example `/orgs/bakery?list=orgs&sort=name&dir=desc&at=3`
+  (`parseOrder`, `orderSearch` and `walkOrder` in `routes/index.tsx`). No
+  `list` is the Plan, and no query at all is the Plan with its default
+  order. The list and the running order share one SQL order
+  (`orderedSql`).
+- **Start, Prev and Next.** `Start` on the plate of a list opens its first
+  organisation. `Prev` and `Next` on the plate of an organisation page open
+  its neighbours, and each caption names the organisation. At an end the
+  key is off, with `First in list` or `Last in list`.
+- **A save keeps the order.** Each form of the organisation page and of
+  its edit pages posts with the query of the page, and the redirect keeps
+  it (`orderBack`). A save can move the organisation in the list (a new
+  due date) or out of it (a new stage). `walkOrder` takes the neighbours
+  from the place where the organisation was (`at`), in the list without
+  it, so `Next` still opens the organisation that was after it.
 
 ### Short IDs
 
@@ -285,7 +328,8 @@ file, as the screenshot script does. In Chromium, it does a search, a
 stage key and a sort key on the list, and a Log press on an organisation
 page. After each press it checks the URL, the focus, the scroll position,
 and that the page did not load again. It checks Back and Forward, a link
-to a passkey page, and a fetch that fails. Then it does a Log press and a
+to a passkey page, Next on the plate of an organisation page, and a fetch
+that fails. Then it does a Log press and a
 search with `?theme=bare` and with JavaScript off.
 
 ```bash

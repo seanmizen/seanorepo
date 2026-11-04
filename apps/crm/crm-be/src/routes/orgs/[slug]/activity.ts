@@ -4,8 +4,8 @@ import { logActivity } from '../../../activity';
 import type { Auth } from '../../../auth';
 import { activityForm } from '../../../forms/activity';
 import { parseForm } from '../../../forms/form';
-import { findOrg, orgPath } from '../../../org';
-import { sendNotFound, sendOrgPage } from '../[slug]';
+import { findOrg } from '../../../org';
+import { orderBack, sendNotFound, sendOrgPage } from '../[slug]';
 
 /**
  * `POST /<slug>/activity`: the Log module. The key that the person tapped
@@ -22,7 +22,7 @@ export const orgActivityRoute = (app: FastifyInstance, db: Database) => {
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 
@@ -44,7 +44,7 @@ export const orgActivityRoute = (app: FastifyInstance, db: Database) => {
         });
       }
       logActivity(db, (request.auth as Auth).personId, org, values);
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 };

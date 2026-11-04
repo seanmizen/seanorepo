@@ -44,6 +44,7 @@ import { orgStageRoute } from './routes/orgs/[slug]/stage';
 import { orgUndoRoute } from './routes/orgs/[slug]/undo';
 import { orgsNewRoute } from './routes/orgs/new';
 import { privacyRoute } from './routes/privacy';
+import { reviewRoute } from './routes/review';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4100;
 const IS_TEST = process.env.NODE_ENV === 'test';
@@ -89,6 +90,7 @@ export const buildApp = (db: Database) => {
   });
 
   listRoute(app, db);
+  reviewRoute(app, db);
   privacyRoute(app);
   healthRoute(app);
   faviconRoute(app);

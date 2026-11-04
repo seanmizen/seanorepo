@@ -2,8 +2,8 @@ import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { Auth } from '../../../../../auth';
 import { findContact, removeContact } from '../../../../../contacts';
-import { findOrg, orgPath, parseNumber } from '../../../../../org';
-import { sendNotFound } from '../../../[slug]';
+import { findOrg, parseNumber } from '../../../../../org';
+import { orderBack, sendNotFound } from '../../../[slug]';
 
 /**
  * `POST /orgs/<slug>/contacts/<number>/remove`: the `Remove` button of a
@@ -19,7 +19,7 @@ export const orgContactRemoveRoute = (app: FastifyInstance, db: Database) => {
       const contact = org && number && findContact(db, org.id, number);
       if (!org || !contact) return sendNotFound(request, reply);
       removeContact(db, (request.auth as Auth).personId, org.id, contact);
-      return reply.redirect(orgPath(org.slug), 303);
+      return reply.redirect(orderBack(org.slug, request), 303);
     },
   );
 };
