@@ -2,6 +2,23 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { BareText } from './BareText';
 
 /**
+ * The sub-label of a key: small text under its label, as on the keys of
+ * autosam. It tells what else the key does (`then due`, `sets Lost`), the
+ * date that it sets, or a count. With no page styles it follows the label
+ * after a space.
+ */
+export const Sub = ({ children }: { children: ReactNode }) => (
+  <>
+    {' '}
+    <span className="sub">{children}</span>
+  </>
+);
+
+/** The class of a key: `key`, and `fix` for the key that fixes a problem. */
+export const keyClass = (fix?: boolean, more?: string) =>
+  ['key', more, fix && 'fix'].filter(Boolean).join(' ');
+
+/**
  * A key: a raised `<button>` that moves when pressed. It submits its form
  * unless `type` says otherwise.
  *
@@ -12,14 +29,35 @@ import { BareText } from './BareText';
  * that text shows after the key. A key with `off` needs an `id`. When the
  * page already shows the reason as a text, give the id of that text as
  * `aria-describedby`, and the key adds no second text.
+ *
+ * `sub` is the sub-label (`Sub`). `fix` marks the key that fixes the
+ * problem that the glass shows: the theme gives it a thick outline, and
+ * the text of the glass names it (`apps/crm/docs/002-rack.md`, detail 6).
  */
 export const Key = ({
   type = 'submit',
   off,
+  sub,
+  fix,
+  children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { off?: string }) => {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  off?: string;
+  sub?: ReactNode;
+  fix?: boolean;
+}) => {
+  const content = (
+    <>
+      {children}
+      {sub !== undefined && <Sub>{sub}</Sub>}
+    </>
+  );
   if (off === undefined) {
-    return <button type={type} className="key" {...props} />;
+    return (
+      <button type={type} className={keyClass(fix)} {...props}>
+        {content}
+      </button>
+    );
   }
   if (!props.id) throw new Error('A key with a reason (off) needs an id.');
   const shown = props['aria-describedby'];
@@ -27,12 +65,14 @@ export const Key = ({
   const button = (
     <button
       type={type}
-      className="key"
+      className={keyClass(fix)}
       {...props}
       disabled
       title={off}
       aria-describedby={why}
-    />
+    >
+      {content}
+    </button>
   );
   if (shown) return button;
   return (

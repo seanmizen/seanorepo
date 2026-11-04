@@ -109,7 +109,7 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
     const response = await add({ email: 'ann@example.com' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">A contact of this organisation has this email address.</p>',
+      '<p role="alert" class="status"><span>A contact of this organisation has this email address.</span></p>',
     );
   });
 
@@ -119,7 +119,7 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
     const response = await add({ email: 'ann@example.com' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">A removed contact of this organisation has this email address. Tap Show hidden in Activity, then Restore.</p>',
+      '<p role="alert" class="status"><span>A removed contact of this organisation has this email address. Tap Show hidden in Activity, then Restore.</span></p>',
     );
   });
 
@@ -127,7 +127,7 @@ describe('POST /orgs/<slug>/contacts (Add a contact)', () => {
     const response = await add({ name: ' ', role: 'staff' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Type a name, a phone number or an email address.</p>',
+      '<p role="alert" class="status"><span>Type a name, a phone number or an email address.</span></p>',
     );
     expect(response.body).toContain('<option value="staff" selected="">');
     const bad = await add({ name: 'Ann', email: 'not an email' });
@@ -213,7 +213,7 @@ describe('/orgs/<slug>/contacts/<number>', () => {
     );
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Another person has this email address.</p>',
+      '<p role="alert" class="status"><span>Another person has this email address.</span></p>',
     );
     expect(response.body).toContain('value="taken@example.com"');
   });

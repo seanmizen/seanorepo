@@ -181,8 +181,8 @@ describe('the record forms', () => {
       },
       {
         form: contactForm,
-        // The First contact module of /orgs/new, and the Add a contact
-        // module of the organisation page.
+        // The First contact module of /orgs/new, and the Add contact row
+        // of the Contacts band of the organisation page.
         creates: [
           [newLead, 'contact_'],
           [orgPage, ''],
@@ -250,7 +250,10 @@ describe('the record forms', () => {
     expect(error).toBe('Type the name of the organisation.');
     for (const response of [create, edit]) {
       expect(response.statusCode).toBe(400);
-      expect(response.body).toContain(`<p role="alert">${error}</p>`);
+      // The line of the glass: an LCD, or the display unit of a rack.
+      expect(response.body).toMatch(
+        new RegExp(`<p role="alert"[^>]*>(<span>)?${error}<`),
+      );
     }
   });
 

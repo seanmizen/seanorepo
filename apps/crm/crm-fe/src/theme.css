@@ -431,7 +431,7 @@ button.link:disabled {
   gap: 0.5em;
 }
 .window [role="alert"]::before,
-.glass > .status:not(.empty)::before,
+.glass > .status:not(.empty, .saved)::before,
 .strip .mark::before,
 .readout .mark::before {
   content: "";
@@ -666,6 +666,14 @@ button.link:disabled {
 .strip > .count {
   flex: 0 0 6em;
 }
+.strip > .wide {
+  flex-grow: 2;
+}
+/* A strip of more than three readings after the name (the organisation)
+   gives the name less of the width. */
+.strip:has(> :nth-child(5)) > .name {
+  flex-grow: 2;
+}
 .strip dt {
   margin-bottom: 0.2em;
 }
@@ -685,14 +693,14 @@ button.link:disabled {
   font-weight: 500;
   line-height: 1;
 }
-.strip .text > .value {
+.strip :is(.text, .wide) > .value {
   font-size: 1.15em;
   font-weight: 500;
 }
 .strip .line {
   font-size: 0.95em;
 }
-.strip .text > .line {
+.strip :is(.text, .wide) > .line {
   color: var(--dim);
 }
 /* The plate: the keys at the right of the glass, each with its caption
@@ -701,7 +709,7 @@ button.link:disabled {
 .plate {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(6.5em, auto);
+  grid-auto-columns: 7.5em;
   align-content: center;
   gap: 0.3em;
 }
@@ -1401,6 +1409,13 @@ button.link:disabled {
     min-height: 44px;
   }
 }
+/* A link key and a button key on the plate have one height and fill the
+   width of their caption. */
+.plate-key > .key {
+  box-sizing: border-box;
+  width: 100%;
+  height: 2.4em;
+}
 
 /* Home */
 
@@ -1417,89 +1432,200 @@ button.link:disabled {
 
 /* Organisation
  * Where: the pages under /orgs/<slug> (crm-be/src/routes/orgs/[slug]*).
- * Why: the device has the Log, Stage, Next action and Add a contact
- * modules. The boxes are Activity, Contacts and Details. */
+ * Why: the rack has Log, Stage and Next action in one row. The bands are
+ * Contacts and Details side by side, then Activity. */
 
-/* The Due field and its Save key share one row, in halves. */
+/* The Due date field and its Save key share one row, in halves. */
 .module .pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 0.25em;
 }
-/* A link to a module (the "Add a contact" link) outlines it. */
+/* The edit page of a contact: one module of the width of the unit, with
+   its four fields side by side on a wide screen. */
+@media (width >= 960px) {
+  #contact-edit > .module {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  #contact-edit > .module > h2 {
+    grid-column: 1 / -1;
+  }
+  #contact-edit > .module > .field {
+    grid-column: auto;
+  }
+}
+/* A link to a module outlines it. */
 .module:target {
   outline: 2px solid var(--ink);
   outline-offset: -2px;
 }
 
-/* The Activity list: a <details>, closed until a tap. The summary has the
-   count, then the newest line, cut at two lines. */
-.events summary {
-  cursor: pointer;
+/* The sub-label of a key: small mono capitals under its label. It tells
+   what else the key does (THEN DUE, SETS LOST), the date that it sets, or
+   a count. */
+.key .sub {
+  display: block;
   color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.62em;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
-.events summary .newest {
-  display: -webkit-box;
-  overflow: hidden;
+.key .sub time {
+  font-size: 1em;
+}
+
+/* A problem shows in three places (docs/002-rack.md, detail 6): the line
+   of the glass, the part with the problem and the key that fixes it. The
+   part and the key get a thick outline in the ink, and the label of the
+   part says the word (· NEEDED). So no state uses colour alone. */
+.module.problem,
+.field.problem :is(input, select, textarea),
+fieldset.field.problem,
+.key.fix {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+fieldset.field.problem {
+  outline-offset: 2px;
+}
+.module.problem > .value,
+.problem-word {
   color: var(--ink);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  font-weight: 700;
 }
-.events[open] summary .newest {
-  display: none;
-}
-.events ol {
-  margin: 0.4em 0 0;
-  padding: 0;
-  list-style: none;
-}
-/* Each line: the time, then what happened and its text, then Edit. On a
-   narrow screen, the time and Edit share the first line. */
-.box .events li {
+
+/* The bands of a page with more than one: a grid of 12. Contacts (8) and
+   Details (4) share a row, and Activity has the next row. */
+.bands {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 0.1em 1em;
-  margin: 0;
-  padding: 0.35em 0;
-  border-top: 1px solid var(--line);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 1em;
+  align-items: start;
 }
-.events li > time {
-  grid-column: 1;
+.bands > .band {
+  grid-column: 1 / -1;
 }
-.events li > :is(.what, .text) {
-  grid-column: 2;
-  overflow-wrap: anywhere;
+.bands > .band.span-8 {
+  grid-column: span 8;
 }
-.events li > .edit {
-  grid-column: 3;
-  grid-row: 1;
+.bands > .band.span-4 {
+  grid-column: span 4;
 }
 @media (width < 960px) {
-  .box .events li {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .events li > :is(.what, .text) {
+  .bands > .band:is(.span-8, .span-4) {
     grid-column: 1 / -1;
   }
-  .events li > .edit {
-    grid-column: 2;
+}
+/* The tools of a band: links and keys at the right of its head. */
+.band-head > .tools {
+  display: flex;
+  gap: 0.5em;
+  margin-left: auto;
+}
+.band-head > .tools .key {
+  min-height: 1.9em;
+  font-size: 0.9em;
+}
+/* A row with no link has no arrow: it opens nothing. */
+.chart tbody th:not(:has(> a)) > .arrow {
+  visibility: hidden;
+}
+/* The Edit and Remove links, and Restore, of a row of a band. */
+.chart .row-actions {
+  display: inline-flex;
+  gap: 0 1em;
+  white-space: nowrap;
+}
+.chart .row-actions form {
+  display: inline;
+}
+.chart td.c-act {
+  text-align: right;
+}
+
+/* Contacts: the name and the email share the rest of the width. The
+   last row adds a contact: each field under its column, with its label
+   for no page styles and for a narrow screen only. */
+.contacts col.c-phone {
+  width: 9.5em;
+}
+.contacts col.c-role {
+  width: 7em;
+}
+.contacts col.c-act {
+  width: 10em;
+}
+.chart tfoot :is(th, td) {
+  height: auto;
+  padding: 0.3em;
+  overflow: visible;
+}
+.chart tfoot td.c-act {
+  text-align: left;
+}
+.chart tfoot .key {
+  width: 100%;
+}
+@media (width >= 960px) {
+  .chart tfoot .field > .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 }
 
-/* Undo and Redo: one row of keys at the top of the Activity box, always in
-   the same place. A key that cannot act is off, and its hover text says
-   why (REQ-CRM-BUTTON-001). Show hidden is the first part of the open
-   list. */
-.history {
-  display: flex;
-  gap: 0.25em;
+/* Details: a definition list on the paper of the band. */
+.sheet {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--line);
 }
-.events > form {
-  margin-top: 0.4em;
+.sheet > div {
+  display: contents;
 }
+.sheet :is(dt, dd) {
+  height: 2.2em;
+  margin: 0;
+  padding: 0 0.65rem;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface);
+  line-height: 2.2em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet dt {
+  color: var(--muted);
+}
+.sheet .none {
+  color: var(--muted);
+}
+
+/* Activity: the event and the time have fixed widths. The text has the
+   rest, and ends in an ellipsis. Its title holds the full text. */
+.activity col.c-name {
+  width: 12em;
+}
+.activity col.c-when {
+  width: 12em;
+}
+.activity col.c-act {
+  width: 10em;
+}
+.activity td.c-text > .what + .text {
+  color: var(--muted);
+}
+
 /* A hidden visit, note or contact: the word "hidden" as a silkscreen
    label, then Restore. */
 .flag {
@@ -1509,11 +1635,92 @@ button.link:disabled {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.events li > span.edit {
-  white-space: nowrap;
-}
-.events li > span.edit form {
-  display: inline;
+
+/* On a narrow screen a row of Contacts or Activity folds to two lines, at
+   the one fixed height of a band row. Contacts: the name and Edit, then
+   the phone, the email and the role. Activity: the event and the time,
+   then the text and Edit. The add row of Contacts stacks its fields. */
+@media (width < 960px) {
+  .contacts .chart tbody tr,
+  .activity .chart tbody tr {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "name name act" "phone email role";
+    padding: 0 0.6em;
+    background: var(--surface);
+  }
+  .activity .chart tbody tr {
+    grid-template-areas: "name name when" "text text act";
+  }
+  .activity .chart tbody tr:has(> th.c-gutter) {
+    grid-template-rows: 2.2em 1.5em 1.3em;
+    grid-template-areas: "gutter gutter gutter" "name name when" "text text act";
+  }
+  .contacts .chart tbody td.c-phone {
+    grid-area: phone;
+  }
+  .contacts .chart tbody td.c-email {
+    grid-area: email;
+  }
+  .contacts .chart tbody td.c-role {
+    grid-area: role;
+  }
+  .contacts .chart tbody td:is(.c-phone, .c-email, .c-role),
+  .activity .chart td.c-text {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.9em;
+    text-overflow: ellipsis;
+  }
+  .contacts .chart tbody td.c-email,
+  .contacts .chart tbody td.c-role {
+    padding-left: 0.75em;
+  }
+  .activity .chart td.c-when {
+    grid-area: when;
+    align-self: end;
+    font-size: 0.9em;
+  }
+  .activity .chart td.c-text {
+    grid-area: text;
+  }
+  .chart tbody td.c-act {
+    grid-area: act;
+    align-self: center;
+  }
+  .activity .chart td.c-act {
+    align-self: start;
+  }
+  .chart tfoot {
+    display: block;
+    padding: 0.6em;
+    border-radius: 6px;
+    background: var(--surface);
+  }
+  .chart tfoot tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: none;
+    gap: 0.5em;
+    height: auto;
+    padding: 0;
+    background: none;
+  }
+  .chart tfoot :is(th, td) {
+    padding: 0;
+  }
+  .sheet :is(dt, dd) {
+    padding: 0 0.6em;
+  }
+  /* A strip of more than three readings after the name (the organisation)
+     folds in halves, so each value has room. */
+  .strip:has(> :nth-child(5)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .strip:has(> :nth-child(5)) > :nth-child(2n) {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* The Edit and Remove links of a record. In a table they are the last

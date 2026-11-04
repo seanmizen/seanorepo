@@ -3,6 +3,12 @@ import type { ReactNode } from 'react';
 /** The width of a module: a number of columns of its grid. */
 export type Span = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 12;
 
+/** The class of a module of `span` columns, with `problem`. */
+const moduleClass = (span: Span, problem: boolean) =>
+  ['module', span !== 6 && `span-${span}`, problem && 'problem']
+    .filter(Boolean)
+    .join(' ');
+
 /**
  * A module of the device, as each module of the autosam panel: the
  * silkscreen label at the top left, the value (if any) at the top right,
@@ -15,21 +21,27 @@ export type Span = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 12;
  *
  * The passkey script finds its note and its error line in the same
  * `<section>`, so each passkey control is in a module.
+ *
+ * `problem` marks the module of a state that needs action, for example an
+ * overdue next action: the theme gives it a thick outline, and its `value`
+ * says the state in a word (`apps/crm/docs/002-rack.md`, detail 6).
  */
 export const Module = ({
   label,
   value,
   span = 6,
   id,
+  problem = false,
   children,
 }: {
   label?: string;
   value?: ReactNode;
   span?: Span;
   id?: string;
+  problem?: boolean;
   children: ReactNode;
 }) => (
-  <section id={id} className={span === 6 ? 'module' : `module span-${span}`}>
+  <section id={id} className={moduleClass(span, problem)}>
     {label !== undefined && <h2 className="label">{label}</h2>}
     {value !== undefined && <p className="value">{value}</p>}
     {children}

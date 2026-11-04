@@ -87,20 +87,22 @@ const post = (url: string, fields: Record<string, string> = {}) =>
   postForm(app, url, fields, cookie);
 
 /**
- * Tap the Undo or the Redo key of the page of the organisation `id`, as a
- * browser does: post its form with the event number on the page. Returns
- * false when the key is off.
+ * Tap the Undo or the Redo key on the plate of the page of the organisation
+ * `id`, as a browser does: post its form with the event number on the page.
+ * Returns false when the key is off.
  */
 const press = async (id: string, kind: 'undo' | 'redo') => {
   const slug = slugOf(id);
   const html = await get(`/orgs/${slug}`);
+  const key = html.match(new RegExp(`<button[^>]* id="${kind}"[^>]*>`))?.[0];
+  if (!key) throw new Error(`The page has no ${kind} key.`);
+  if (key.includes('disabled=""')) return false;
   const form = html.match(
     new RegExp(
       `<form action="/orgs/${slug}/${kind}" method="post">([\\s\\S]*?)</form>`,
     ),
   )?.[1];
   if (!form) throw new Error(`The page has no ${kind} form.`);
-  if (form.includes('disabled=""')) return false;
   const event = form.match(/name="event" value="(\d+)"/)?.[1];
   if (!event) throw new Error(`The ${kind} form has no event number.`);
   const response = await post(`/orgs/${slug}/${kind}`, { event });
@@ -363,15 +365,16 @@ describe('Restore (REQ-CRM-UNDO-003)', () => {
 
     // Hidden records do not show by default.
     const plain = await get(`/orgs/${slug}`);
-    expect(plain).not.toContain('<span class="what">Visit 1: Spoke.');
-    expect(plain).toContain('<span class="what">Undo of Visit 1: Spoke.');
-    expect(plain).not.toContain('<th scope="row">Ann</th>');
+    expect(plain).not.toContain('title="Visit 1 · Spoke"');
+    expect(plain).toContain('<span class="what">Undo of Visit 1 · Spoke.');
+    expect(plain).not.toContain('title="Ann"');
     expect(plain).not.toContain('Restore');
 
     const shown = await get(`/orgs/${slug}?hidden=1`);
-    expect(shown).toContain('<details class="events" open="">');
-    expect(bodyText(shown)).toContain('Visit 1: Spoke. Keen hidden Restore');
-    expect(shown).toContain('<th scope="row">Ann</th>');
+    expect(bodyText(shown)).toMatch(
+      /Visit 1 · Spoke \S+ \S+ Keen hidden Restore/,
+    );
+    expect(shown).toContain('<th scope="row" class="c-name" title="Ann">');
     // Restore is only on the two hidden records.
     expect(shown.match(/>Restore</g)).toHaveLength(2);
     expect(shown).toContain(
@@ -507,7 +510,7 @@ describe('the data is never deleted (REQ-CRM-UNDO-001)', () => {
   });
 });
 
-describe('the keys of the Activity box (REQ-CRM-BUTTON-001)', () => {
+describe('the keys of the plate and of the Activity band (REQ-CRM-BUTTON-001)', () => {
   /** The attributes of a tag, by name. */
   const attrsOf = (tag: string) =>
     Object.fromEntries(
@@ -517,7 +520,8 @@ describe('the keys of the Activity box (REQ-CRM-BUTTON-001)', () => {
   /**
    * Check the key `id` with `label` on `html`: it is present, and when it
    * is off, its reason is in `title` and in the text that
-   * `aria-describedby` names. Returns the reason, or null when it is on.
+   * `aria-describedby` names: the caption of a plate key, or else a text
+   * for no page styles. Returns the reason, or null when it is on.
    */
   const checkKey = (html: string, id: string, label: string) => {
     const tag = html.match(
@@ -527,9 +531,14 @@ describe('the keys of the Activity box (REQ-CRM-BUTTON-001)', () => {
     const attrs = attrsOf(String(tag));
     if (!('disabled' in attrs)) return null;
     expect(attrs.title).toBeTruthy();
-    expect(attrs['aria-describedby']).toBe(`${id}-why`);
+    const plate = attrs['aria-describedby'] === `${id}-caption`;
+    expect(attrs['aria-describedby']).toBe(
+      plate ? `${id}-caption` : `${id}-why`,
+    );
     const why = html.match(
-      new RegExp(`<span class="bare-text" id="${id}-why">([^<]*)</span>`),
+      plate
+        ? new RegExp(`<span class="caption" id="${id}-caption">([^<]*)</span>`)
+        : new RegExp(`<span class="bare-text" id="${id}-why">([^<]*)</span>`),
     )?.[1];
     expect(why).toBe(attrs.title);
     return attrs.title;

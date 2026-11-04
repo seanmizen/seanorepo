@@ -102,9 +102,11 @@ describe('POST /<slug>/stage', () => {
       })
     ).body;
     expect(html).toContain(
-      '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">Quoted<span class="latch-state" aria-hidden="true"> (current)</span></button>',
+      '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">Quoted<span class="latch-state" aria-hidden="true"> (current)</span> <span class="sub">1</span></button>',
     );
-    expect(html).toContain('<dt>Next action</dt><dd>Chase quote</dd>');
+    expect(html).toContain(
+      '<dt>Next action</dt><dd class="value">Chase quote</dd>',
+    );
     expect(html).toContain(
       '<time dateTime="2030-01-02T00:00:00+00:00" title="2030-Jan-02 00:00:00">2030-Jan-02</time>',
     );
@@ -193,7 +195,9 @@ describe('POST /<slug>/stage', () => {
       cookie,
     );
     expect(bad.statusCode).toBe(400);
-    expect(bad.body).toContain('<p role="alert">Choose a stage.</p>');
+    expect(bad.body).toContain(
+      '<p role="alert" class="status"><span>Choose a stage.</span></p>',
+    );
     const badDate = await postForm(
       app,
       `/orgs/${slug}/stage`,

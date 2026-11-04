@@ -55,9 +55,21 @@ const lastAudit = () =>
 describe('/orgs/<slug>/edit', () => {
   test('GET shows the form of /orgs/new, filled in, and says that old links stop working', async () => {
     const html = (await get(`/orgs/${slug}/edit`)).body;
+    // The same rack as the organisation page: its read-out in the glass,
+    // and Save and Cancel on the plate. Save submits the form by its id.
     expect(html).toContain(
-      '<form action="/orgs/acme-plumbing/edit" method="post">',
+      '<form id="org-edit" action="/orgs/acme-plumbing/edit" method="post">',
     );
+    expect(html).toContain(
+      '<div class="name"><dt>Name</dt><dd class="value">Acme Plumbing</dd>',
+    );
+    expect(html).toContain(
+      '<button type="submit" class="key" id="save" form="org-edit" aria-describedby="save-caption">Save</button>',
+    );
+    expect(html).toContain(
+      '<a class="key" id="cancel" href="/orgs/acme-plumbing"',
+    );
+    expect(html).not.toContain('class="device');
     expect(html).toContain(
       '<input required="" name="name" value="Acme Plumbing"/>',
     );
@@ -121,7 +133,7 @@ describe('/orgs/<slug>/edit', () => {
     const response = await save({ ...current, slug: 'other' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Another organisation has this URL slug.</p>',
+      '<p role="alert" class="status"><span>Another organisation has this URL slug.</span></p>',
     );
     expect(response.body).toContain('name="slug" value="other"');
     expect(
@@ -137,7 +149,7 @@ describe('/orgs/<slug>/edit', () => {
     const response = await save({ ...current, name: '' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Type the name of the organisation.</p>',
+      '<p role="alert" class="status"><span>Type the name of the organisation.</span></p>',
     );
   });
 

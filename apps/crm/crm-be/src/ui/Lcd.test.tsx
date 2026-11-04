@@ -99,7 +99,10 @@ describe('the glass (REQ-CRM-LCD-002)', () => {
       '<a class="key" id="k-on" href="/?page=2" aria-describedby="k-on-caption">Next</a> <span class="caption" id="k-on-caption">Page 2 of 2</span>',
     );
     // An empty line has no mark.
-    expect(THEME).toMatch(/\.glass > \.status:not\(\.empty\)::before,/);
+    // An empty line and the line of a save have no mark.
+    expect(THEME).toMatch(
+      /\.glass > \.status:not\(\.empty, \.saved\)::before,/,
+    );
   });
 
   describe('on each page', () => {
@@ -136,7 +139,7 @@ describe('the glass (REQ-CRM-LCD-002)', () => {
       expect(glass).not.toContain('Bravo');
       expect(divOf(home, 'lcd')).toBe('');
       checkGlass(divOf(await get('/account'), 'lcd'));
-      const org = divOf(await get('/orgs/alpha'), 'lcd');
+      const org = divOf(await get('/orgs/alpha'), 'glass');
       expect(checkGlass(org)).toBe(1);
 
       // Each band row and each menu row has one fixed height. The arrow

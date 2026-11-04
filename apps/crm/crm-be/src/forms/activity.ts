@@ -15,7 +15,9 @@ export const LOG_KEYS: Record<string, string> = {
  * Log module. `/<slug>` renders it empty, and `/orgs/<slug>/activity/<number>`
  * renders it with the current values.
  *
- * Each key saves. An outcome key saves a visit with that outcome and the
+ * Each key saves. The sub-labels tell what else a key does: Call back is
+ * `then due` (set the next action next), Do not knock `sets Lost`, and
+ * Note only saves `no visit`. An outcome key saves a visit with that outcome and the
  * text as its note. The `Note only` key saves the text as a note, with no
  * visit. On the edit page, a different key changes the outcome, or changes
  * a visit to a note, or a note to a visit. The Save key of the edit page
@@ -34,15 +36,20 @@ export const activityForm: RecordFormDef = {
         },
         {
           name: 'outcome',
-          label: 'Save as',
+          label: 'Save as visit',
           type: 'keys',
-          required: 'Tap one of the Save as buttons.',
+          required: 'Tap Note only or one of the Save as visit buttons.',
           options: LOG_KEYS,
           rows: [
             ['no_answer', 'spoke', 'call_back'],
             ['not_interested', 'do_not_knock'],
             [NOTE_ONLY],
           ],
+          hints: {
+            call_back: 'then due',
+            do_not_knock: 'sets Lost',
+            [NOTE_ONLY]: 'no visit',
+          },
           save: 'Save',
         },
       ],
@@ -52,4 +59,5 @@ export const activityForm: RecordFormDef = {
     values.outcome === NOTE_ONLY && !values.note
       ? 'Type a visit note, then tap Note only.'
       : undefined,
+  checkField: 'note',
 };

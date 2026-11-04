@@ -174,6 +174,21 @@ export const resolveSlug = (
   return { slug: values.slug };
 };
 
+/** The number of organisations at each stage. */
+export const stageCounts = (db: Database) => {
+  const counts = Object.fromEntries(
+    Object.keys(STAGES).map((stage) => [stage, 0]),
+  ) as Record<Stage, number>;
+  for (const row of db
+    .query<{ stage: Stage; n: number }, []>(
+      'SELECT stage, count(*) AS n FROM organisation GROUP BY stage;',
+    )
+    .all()) {
+    counts[row.stage] = row.n;
+  }
+  return counts;
+};
+
 /** The organisation with this slug, or null. */
 export const findOrg = (db: Database, slug: string) =>
   db
@@ -196,10 +211,13 @@ const PIPELINE = ['stage', 'next_action', 'next_action_on'] as const;
 
 /**
  * Read a pipeline from a post: `stage`, `next_action` and `next_action_on`
- * (a date, `YYYY-MM-DD`). An empty next action or date is null. Returns the
- * pipeline, or the error for the first value that is not valid. The route
- * `POST /orgs/<slug>/stage` and the MCP tools `set_stage` and
- * `set_next_action` use it, so they accept the same values.
+ * (a date, `YYYY-MM-DD`). An empty next action or date is null. `due` is
+ * the date of a due key of the Next action module (Tomorrow, +3 days,
+ * +1 week): it wins over `next_action_on`, because the key and the date
+ * field are in one form. Returns the pipeline, or the error for the first
+ * value that is not valid. The route `POST /orgs/<slug>/stage` and the MCP
+ * tools `set_stage` and `set_next_action` use it, so they accept the same
+ * values.
  */
 export const parsePipeline = (
   body: unknown,
@@ -207,7 +225,8 @@ export const parsePipeline = (
   const post = (body ?? {}) as Record<string, unknown>;
   const stage = formText(post.stage);
   const nextAction = formText(post.next_action) || null;
-  const nextActionOn = formText(post.next_action_on) || null;
+  const nextActionOn =
+    formText(post.due) || formText(post.next_action_on) || null;
   if (!isStage(stage)) return { error: 'Choose a stage.' };
   if (nextActionOn && !/^\d{4}-\d{2}-\d{2}$/.test(nextActionOn)) {
     return { error: 'The Due date is not valid.' };

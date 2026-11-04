@@ -133,19 +133,24 @@ const place = (page) =>
 /** The organisation page of the test: Battersea Bakery. */
 const ORG = '/orgs/battersea-bakery';
 
-/** The number of events in the Activity box. */
-const events = (page) => page.locator('.events ol li').count();
+/** The number of events in the Activity band. */
+const events = (page) =>
+  page.locator('.activity tbody th[scope="row"]').count();
+
+/** The `Note only` key of the Log module. Its sub-label is `no visit`. */
+const NOTE_ONLY = 'button[name="outcome"][value="note"]';
 
 /** Type `note` in the Log module, then tap its `Note only` key. */
 const logNote = async (page, note) => {
   await page.locator('textarea[name="note"]').fill(note);
-  await page.getByRole('button', { name: 'Note only', exact: true }).click();
+  await page.locator(NOTE_ONLY).click();
 };
 
-/** Wait until the Activity box has `count` events. */
+/** Wait until the Activity band has `count` events. */
 const waitForEvents = (page, count) =>
   page.waitForFunction(
-    (n) => document.querySelectorAll('.events ol li').length === n,
+    (n) =>
+      document.querySelectorAll('.activity tbody th[scope="row"]').length === n,
     count,
   );
 
@@ -307,15 +312,13 @@ try {
   await page.evaluate(() => {
     window.morphMark = 'still here';
   });
-  const key = page.getByRole('button', { name: 'Note only', exact: true });
+  const key = page.locator(NOTE_ONLY);
   // Scroll so that the Log key is at the bottom of the window.
-  await page.evaluate(() => {
-    const button = [...document.querySelectorAll('button')].find(
-      (element) => element.textContent === 'Note only',
-    );
+  await page.evaluate((selector) => {
+    const button = document.querySelector(selector);
     const bottom = button.getBoundingClientRect().bottom + scrollY;
     scrollTo(0, bottom - innerHeight + 8);
-  });
+  }, NOTE_ONLY);
   const before = await page.evaluate(() => ({
     y: scrollY,
     length: history.length,
@@ -334,7 +337,7 @@ try {
   }));
   assert.equal(after.mark, 'still here', 'The page did not load again.');
   assert.equal(after.y, before.y, 'The scroll position did not change.');
-  assert.equal(await focusText(page), 'Note only');
+  assert.equal((await focusText(page))?.trim(), 'Note only');
   assert.ok(
     await key.evaluate((element) => element === document.activeElement),
   );

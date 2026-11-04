@@ -167,11 +167,13 @@ describe('short IDs (REQ-CRM-ID-001)', () => {
       })
     ).body;
     const text = bodyText(html);
-    expect(text).toContain('Visit 1: No answer. Closed for a delivery. Edit');
-    expect(text).toContain('Visit 2: Spoke. Owner wants');
-    expect(text).toContain('Note 3: Sent a price');
+    expect(text).toMatch(
+      /Visit 1 · No answer \S+ \S+ Closed for a delivery\. Edit/,
+    );
+    expect(text).toMatch(/Visit 2 · Spoke \S+ \S+ Owner wants/);
+    expect(text).toMatch(/Note 3 \S+ \S+ Sent a price/);
     expect(html).toContain(
-      '<a class="edit" href="/orgs/the-example-bakery/activity/2">',
+      '<a href="/orgs/the-example-bakery/activity/2">Edit</a>',
     );
   });
 });

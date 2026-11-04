@@ -204,7 +204,7 @@ describe('MCP tools', () => {
     ).toEqual({ slug, number: 1 });
     await callTool(client, 'set_stage', { slug, stage: 'quoted' });
     const text = await orgPageText(slug);
-    expect(text).toContain('Visit 1: Spoke.');
+    expect(text).toContain('Visit 1 · Spoke');
     expect(text).toContain('Stage: Lead → Quoted.');
     expect(text).toContain('Contact added: Ann Owner (Owner).');
   });
