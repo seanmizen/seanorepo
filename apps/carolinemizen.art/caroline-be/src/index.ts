@@ -16,23 +16,13 @@ import {
 } from './services/db';
 import { queueUnprocessedMedia } from './services/media';
 import { runMigrations } from './services/migrations';
+import { requireSecret } from './services/secrets';
 import { UPLOADS_ROUTE, uploadsPath } from './services/storage/uploads-path';
 
-// Validate required environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const COOKIE_SECRET =
-  process.env.COOKIE_SECRET || 'dev-cookie-secret-change-in-production';
-
-// Warn about insecure secrets in production (but allow for local docker testing)
-if (
-  process.env.NODE_ENV === 'production' &&
-  (JWT_SECRET === 'dev-secret-change-in-production' ||
-    COOKIE_SECRET === 'dev-cookie-secret-change-in-production')
-) {
-  console.warn(
-    '⚠️  WARNING: Using development secrets in production mode. Set JWT_SECRET and COOKIE_SECRET environment variables for real deployments.',
-  );
-}
+// The server stops here in production when a secret is unset or is the
+// development default.
+const JWT_SECRET = requireSecret('JWT_SECRET');
+const COOKIE_SECRET = requireSecret('COOKIE_SECRET');
 
 const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
   logger: { level: 'error' },

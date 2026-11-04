@@ -353,6 +353,7 @@ describe('the compose file', () => {
     ports?: string[];
     environment?: string[];
     volumes?: string[];
+    env_file?: (string | { path: string })[];
   };
   const compose = Bun.YAML.parse(
     readFileSync(
@@ -372,6 +373,31 @@ describe('the compose file', () => {
     expect(prefixes.sort()).toEqual(['crm.db', 'demo-crm.db']);
     expect(new Set(prefixes).size).toBe(prefixes.length);
     expect(env(compose.services.litestream, 'CRM_R2_PATH')).toBe('crm.db');
+  });
+
+  test('each container reads only its own env files', () => {
+    const files = (service: Service) =>
+      (service.env_file ?? []).map((entry) =>
+        typeof entry === 'string' ? entry : entry.path,
+      );
+    const sidecars = Object.values(compose.services).filter((service) =>
+      service.image?.startsWith('litestream/'),
+    );
+    const apps = [compose.services.crm, compose.services['crm-demo']];
+    const sidecarFiles = sidecars.flatMap(files);
+    const appFiles = apps.flatMap(files);
+    // Each sidecar has its own R2 file. The two R2 keys reach different
+    // buckets, and the demo has an unsafe sign-in.
+    expect(sidecars.map((service) => files(service).length)).toEqual([1, 1]);
+    expect(new Set(sidecarFiles).size).toBe(sidecarFiles.length);
+    // An app container never reads an R2 file.
+    for (const file of appFiles) expect(sidecarFiles).not.toContain(file);
+    // A sidecar gets only CRM_R2_PATH from compose. Its R2 file has the rest.
+    for (const service of sidecars) {
+      expect(service.environment?.map((line) => line.split('=')[0])).toEqual([
+        'CRM_R2_PATH',
+      ]);
+    }
   });
 
   test('the demo has its own port, volume and host', () => {

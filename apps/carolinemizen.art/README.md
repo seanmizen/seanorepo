@@ -75,31 +75,23 @@ yarn install
 
 ### Environment Variables
 
-Create a `.env` file in `apps/carolinemizen.art/`:
+Each workspace has its own env file. Git ignores both.
 
-```env
-# Authentication
-JWT_SECRET=your-random-secret-key-here
-COOKIE_SECRET=your-random-cookie-secret-here
+- `caroline-be/.env`: copy `caroline-be/.env.example`. It names and describes
+  each key. Only the backend container (`backend`, `backend-dev`) loads it.
+- `caroline-fe/.env`: copy `caroline-fe/.env.example`. rsbuild reads it at
+  build time, and each value goes into the bundle. It holds no secret.
 
-# Database
-DB_PATH=/app/db
+The frontend container loads no env file and gets no secret. The prod image
+is static files. `API_URL` and `DEBUG_MODE` are build args.
 
-# Email (for magic link authentication)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
+With `NODE_ENV=production`, caroline-be stops at startup when `JWT_SECRET` or
+`COOKIE_SECRET` is unset or is the development default
+(`src/services/secrets.ts`). Generate each one with
+`openssl rand -base64 32`.
 
-# File Storage
-UPLOADS_PATH=/app/uploads
-UPLOADS_URL=http://localhost:4021/uploads
-
-# Frontend URL (for email links)
-FRONTEND_URL=http://localhost:4020
-```
-
-**Note on Gmail**: You'll need to create an [App Password](https://support.google.com/accounts/answer/185833) if using Gmail.
+Gmail needs an [App Password](https://support.google.com/accounts/answer/185833)
+in `SMTP_PASS`, not the account password.
 
 ## Development
 

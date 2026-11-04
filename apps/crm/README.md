@@ -642,9 +642,22 @@ error code and status, with no secret, and the response does not change.
   from the host.
 - **prod:** `docker-compose.yml` sets `NODE_ENV=production`,
   `CRM_PUBLIC_URL=https://crm.seanmizen.com` and `DB_PATH=/data/crm.db`. Each
-  other value comes from `apps/crm/.env` on the server. The file is not in
-  the repo, and `deploy.sh` never changes it. Without the file, each value
-  is unset.
+  other value comes from an env file on the server. The files are not in
+  the repo, and `deploy.sh` never changes them. Without a file, each of its
+  values is unset.
+- **One file for each container.** Each container gets only the secrets
+  that it uses:
+
+  | File | Read by | Values |
+  | --- | --- | --- |
+  | `apps/crm/.env` | `crm` | `CRM_ADMIN_EMAIL`, `SMTP_*`, `EMAIL_FROM_NAME`, `LOG_LEVEL` |
+  | `apps/crm/.env.r2` | `litestream` | `CRM_R2_BUCKET`, `CRM_R2_ENDPOINT`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` |
+  | `apps/crm/.env.demo` | `crm-demo` | `CRM_ADMIN_EMAIL`, `CRM_UNSAFE_DEMO_LOGIN` |
+  | `apps/crm/.env.demo.r2` | `litestream-demo` | the four R2 values of the bucket `crm-demo` |
+
+  The crm app containers get no R2 key, and the sidecars get no SMTP
+  password. A test (`crm-be/src/demo.test.ts`) fails when an app container
+  and a sidecar share an env file.
 
 ## Production
 
@@ -661,7 +674,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   origin `https://crm.seanmizen.com`.
 - **Data.** The SQLite file is `/data/crm.db` in the named volume
   `crm_sqlite_data`. The volume is only on the web box.
-- **Secrets.** `apps/crm/.env` on the server:
+- **Secrets.** `apps/crm/.env` on the server, for the `crm` container:
 
   ```bash
   CRM_ADMIN_EMAIL=
@@ -669,6 +682,11 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   SMTP_PORT=
   SMTP_USER=
   SMTP_PASS=
+  ```
+
+  `apps/crm/.env.r2` on the server, for the `litestream` sidecar only:
+
+  ```bash
   CRM_R2_BUCKET=crm
   CRM_R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
   LITESTREAM_ACCESS_KEY_ID=
@@ -735,7 +753,8 @@ both build from the `release` checkout on asus, and both change on
 
 - **Same image, other env.** The `crm-demo` service in `docker-compose.yml`
   uses the same image and settings as `crm`. Only these are different: the
-  volume `crm_demo_sqlite_data`, the env file `apps/crm/.env.demo`, the host
+  volume `crm_demo_sqlite_data`, the env files `apps/crm/.env.demo` and
+  `apps/crm/.env.demo.r2`, the host
   port 4101 and `CRM_PUBLIC_URL=https://demo-crm.seanmizen.com`. Its
   sidecar `litestream-demo` backs up to the bucket `crm-demo` with the
   prefix `demo-crm.db/`, with an R2 key that reaches only that bucket.
@@ -752,18 +771,23 @@ both build from the `release` checkout on asus, and both change on
 
 ### The env file
 
-`apps/crm/.env.demo` on asus:
+`apps/crm/.env.demo` on asus, for the `crm-demo` container:
+
+```bash
+CRM_ADMIN_EMAIL=demo@example.com
+CRM_UNSAFE_DEMO_LOGIN=true
+```
+
+`apps/crm/.env.demo.r2` on asus, for the `litestream-demo` sidecar only:
 
 ```bash
 CRM_R2_BUCKET=crm-demo
 CRM_R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
 LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
-CRM_ADMIN_EMAIL=demo@example.com
-CRM_UNSAFE_DEMO_LOGIN=true
 ```
 
-Never copy the R2 key of `apps/crm/.env` into this file. The demo has an
+Never copy the R2 key of `apps/crm/.env.r2` into `.env.demo.r2`. The demo has an
 unsafe sign-in, and the prod key can delete the prod backups. Make a demo
 key in the Cloudflare dashboard: *R2 → Manage API tokens → Create API
 token*, permission *Object Read & Write*, applied to the bucket `crm-demo`
@@ -773,7 +797,7 @@ only. Put its *Access Key ID* and *Secret Access Key* in the two
 ```bash
 ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
-chmod 600 .env.demo && cut -d= -f1 .env.demo
+chmod 600 .env.demo .env.demo.r2 && cut -d= -f1 .env.demo .env.demo.r2
 ```
 
 The last part prints the six names, with no values.
@@ -825,9 +849,9 @@ starts with `ZZ`.
 
 ### Sean's steps
 
-1. Make `apps/crm/.env.demo` on asus with the command in
-   [The env file](#the-env-file). The code before the release ignores the
-   file.
+1. Make `apps/crm/.env.demo` and `apps/crm/.env.demo.r2` on asus, as
+   [The env file](#the-env-file) shows. The code before the release ignores
+   the files.
 2. Run `yarn release`. The "Infra apply" workflow makes the DNS record
    `demo-crm.seanmizen.com`. On asus, `deploy.sh` starts `crm-demo` and
    `litestream-demo`, and restarts cloudflared for the new route. Watch it:

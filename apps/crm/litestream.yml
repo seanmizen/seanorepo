@@ -1,9 +1,9 @@
 # Litestream: a crm database to R2. Prod uses the bucket `crm`, and the demo
 # uses the bucket `crm-demo`.
 #
-# docker-compose.yml runs it for prod (litestream, apps/crm/.env) and for
-# the demo (litestream-demo, apps/crm/.env.demo), only when CRM_R2_BUCKET
-# has a value. Litestream expands ${VAR} from its env. It reads
+# docker-compose.yml runs it for prod (litestream, apps/crm/.env.r2) and
+# for the demo (litestream-demo, apps/crm/.env.demo.r2), only when
+# CRM_R2_BUCKET has a value. Litestream expands ${VAR} from its env. It reads
 # LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY by itself.
 #
 # The bucket is in the EU jurisdiction (infra/cloudflare/r2.tf). Only the EU
