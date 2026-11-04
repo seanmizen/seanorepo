@@ -1,4 +1,5 @@
-# Litestream: a crm database to the R2 bucket `crm`.
+# Litestream: a crm database to R2. Prod uses the bucket `crm`, and the demo
+# uses the bucket `crm-demo`.
 #
 # docker-compose.yml runs it for prod (litestream, apps/crm/.env) and for
 # the demo (litestream-demo, apps/crm/.env.demo), only when CRM_R2_BUCKET

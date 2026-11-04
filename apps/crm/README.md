@@ -628,9 +628,9 @@ entry by its number in the organisation (REQ-CRM-ID-001).
 | `SMTP_USER` | unset | `email.ts` | The SMTP user and the sender address: `9mazes@gmail.com`. Necessary when `SMTP_PASS` has a value. |
 | `SMTP_PASS` | unset | `email.ts` | The Gmail app password of `SMTP_USER`. Unset: dev mode. Each email goes to stdout, and crm-be sends nothing. |
 | `EMAIL_FROM_NAME` | `seanmizen.com Administrator` | `email.ts` | The display name of the sender. The From header is `"<EMAIL_FROM_NAME>" <SMTP_USER>`. |
-| `CRM_R2_BUCKET` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The R2 bucket of the backups: `crm`. Unset: the Litestream sidecar prints "Replication is off." and waits with no work. Nothing goes to R2. |
+| `CRM_R2_BUCKET` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The R2 bucket of the backups: `crm` for prod, `crm-demo` for the demo. Unset: the Litestream sidecar prints "Replication is off." and waits with no work. Nothing goes to R2. |
 | `CRM_R2_ENDPOINT` | unset | `docker-compose.yml` (`litestream`), `litestream.yml` | The EU endpoint of R2: `https://<account_id>.eu.r2.cloudflarestorage.com`. The account ID is on the R2 overview page of the Cloudflare dashboard. When `CRM_R2_BUCKET` has a value, each other endpoint stops the sidecar with status 1. |
-| `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket `crm`. |
+| `LITESTREAM_ACCESS_KEY_ID` | unset | Litestream | The access key ID of the R2 API token for the bucket. Each bucket has its own token, and each token reaches only its bucket. |
 | `LITESTREAM_SECRET_ACCESS_KEY` | unset | Litestream | The secret access key of the same token. |
 | `CRM_R2_PATH` | unset | `docker-compose.yml` (each Litestream sidecar), `litestream.yml` | The prefix of the backup files in the bucket. The compose file sets it: `crm.db` for prod, `demo-crm.db` for the demo. Unset: the sidecar stops with status 1. |
 
@@ -693,9 +693,10 @@ The `litestream` service in the `prod` profile (`litestream.yml`) streams
 `/data/crm.db` to R2. It keeps a snapshot each day, and keeps each file for
 90 days. Then erased data expires from the backups.
 
-- **Bucket:** `crm`, with the prefix `crm.db/`. The demo uses the prefix
-  `demo-crm.db/` in the same bucket. `infra/cloudflare/r2.tf` defines the
-  bucket. A test (`crm-be/src/demo.test.ts`) fails when two sidecars have
+- **Bucket:** `crm`, with the prefix `crm.db/`. The demo uses the bucket
+  `crm-demo`, with the prefix `demo-crm.db/`, and its own R2 key. The demo
+  has an unsafe sign-in, so it holds no key to `crm`.
+  `infra/cloudflare/r2.tf` defines the two buckets. A test (`crm-be/src/demo.test.ts`) fails when two sidecars have
   the same prefix.
 - **Jurisdiction:** EU. The data stays inside the EU. Cloudflare has no UK
   jurisdiction. UK GDPR allows a transfer to the EEA under the UK adequacy
@@ -736,8 +737,8 @@ both build from the `release` checkout on asus, and both change on
   uses the same image and settings as `crm`. Only these are different: the
   volume `crm_demo_sqlite_data`, the env file `apps/crm/.env.demo`, the host
   port 4101 and `CRM_PUBLIC_URL=https://demo-crm.seanmizen.com`. Its
-  sidecar `litestream-demo` backs up to the bucket `crm` with the prefix
-  `demo-crm.db/`.
+  sidecar `litestream-demo` backs up to the bucket `crm-demo` with the
+  prefix `demo-crm.db/`, with an R2 key that reaches only that bucket.
 - **Off without the file.** `scripts/prod-docker.sh` (the
   `prod:docker` script) adds the compose profile `demo` only when
   `apps/crm/.env.demo` exists. Without the file, it prints "The demo is
@@ -754,7 +755,7 @@ both build from the `release` checkout on asus, and both change on
 `apps/crm/.env.demo` on asus:
 
 ```bash
-CRM_R2_BUCKET=crm
+CRM_R2_BUCKET=crm-demo
 CRM_R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
 LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
@@ -762,14 +763,17 @@ CRM_ADMIN_EMAIL=demo@example.com
 CRM_UNSAFE_DEMO_LOGIN=true
 ```
 
-The R2 lines are the same as in `apps/crm/.env`. This command makes the
-file from `apps/crm/.env`. It shows no secret, and only the owner can read
-the file:
+Never copy the R2 key of `apps/crm/.env` into this file. The demo has an
+unsafe sign-in, and the prod key can delete the prod backups. Make a demo
+key in the Cloudflare dashboard: *R2 → Manage API tokens → Create API
+token*, permission *Object Read & Write*, applied to the bucket `crm-demo`
+only. Put its *Access Key ID* and *Secret Access Key* in the two
+`LITESTREAM_` lines. Only the owner must read the file:
 
 ```bash
 ssh srv@asus
 cd ~/projects/seanorepo/apps/crm
-(umask 077 && { grep -E '^(CRM_R2_BUCKET|CRM_R2_ENDPOINT|LITESTREAM_ACCESS_KEY_ID|LITESTREAM_SECRET_ACCESS_KEY)=' .env; printf '%s\n' CRM_ADMIN_EMAIL=demo@example.com CRM_UNSAFE_DEMO_LOGIN=true; } > .env.demo) && cut -d= -f1 .env.demo
+chmod 600 .env.demo && cut -d= -f1 .env.demo
 ```
 
 The last part prints the six names, with no values.
@@ -842,7 +846,7 @@ starts with `ZZ`.
    tap `Enter as admin (demo)`, and open an organisation. Then open
    `https://crm.seanmizen.com/login`, and check that it has no demo line and
    no demo button. `ssh srv@asus docker logs crm-demo-litestream`
-   shows the replication to `demo-crm.db/`.
+   shows the replication to `crm-demo/demo-crm.db/`.
 5. Add the import block of the record to `infra/cloudflare/imports.tf` in a
    new PR. The ID is in
    `./tofu state show cloudflare_dns_record.seanmizen_com_demo_crm_cname`.

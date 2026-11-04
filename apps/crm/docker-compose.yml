@@ -8,8 +8,8 @@
 #
 # demo: crm-demo and its Litestream sidecar. The same image, the same code
 # and the same settings as prod. Only the env is different: its own volume,
-# apps/crm/.env.demo, host port 4101, demo-crm.seanmizen.com and the backup
-# prefix demo-crm.db/. scripts/prod-docker.sh adds this profile only when
+# apps/crm/.env.demo, host port 4101, demo-crm.seanmizen.com, and the backup
+# bucket crm-demo with the prefix demo-crm.db/. scripts/prod-docker.sh adds this profile only when
 # apps/crm/.env.demo exists. Without the file, the demo does not start.
 #
 # dev: bind-mounts the monorepo root, so `@shared/*` resolves. node_modules
@@ -124,7 +124,8 @@ services:
     labels:
       - 'description=crm demo (https://demo-crm.seanmizen.com)'
 
-  # Litestream for the demo: the same bucket, the prefix demo-crm.db. A test
+  # Litestream for the demo: the bucket crm-demo (CRM_R2_BUCKET in .env.demo),
+  # with its own R2 key, and the prefix demo-crm.db. A test
   # (crm-be/src/demo.test.ts) fails when two sidecars have the same prefix.
   litestream-demo:
     <<: *litestream-base
