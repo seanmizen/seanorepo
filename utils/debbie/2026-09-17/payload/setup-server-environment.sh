@@ -1579,7 +1579,7 @@ fi
 
 # The .deb files that apt keeps after an install. Nothing reads them again, and
 # the disk can be as small as 128 GB, shared with Docker images and the SQLite
-# volumes.
+# volumes (REQ-DEPLOY-004).
 log "clearing the apt cache"
 apt-get clean
 

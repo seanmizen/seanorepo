@@ -165,6 +165,15 @@ does with the repository.
   The SSH session and the timer also run the same Node, `/usr/bin/node`. If
   they ran different Nodes, a deploy by hand could build native modules for a
   different ABI. The development Node (fnm) is on dev machines only.
+
+  Setup clears the apt cache (`apt-get clean`) at its end. Nothing reads the
+  `.deb` files of an install again, and the Docker images and the SQLite
+  volumes use the same disk. Here "empty" means that the cache holds no `.deb`
+  file other than a pending upgrade. `apt-daily.service` downloads each
+  pending upgrade into the cache before the upgrade installs. Such a file is
+  the work of apt, and the host is correct. A file that the plan of
+  `apt-get -s dist-upgrade` does not install (the same package and version)
+  is a leftover of setup.
 - **Verification:**
   - Inspection — `utils/debbie/2026-09-17/services/deploy.sh` runs
     `yarn install --immutable` then `yarn prod:docker`
@@ -179,6 +188,8 @@ does with the repository.
     /usr/bin/node"
   - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "yarn --version matches the
     repo's packageManager"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "apt cache holds only
+    pending upgrades"
 - **Relations:** depends-on REQ-DEPLOY-002
 
 ## REQ-DEPLOY-005 — The tunnel restarts only when its own configuration changes
