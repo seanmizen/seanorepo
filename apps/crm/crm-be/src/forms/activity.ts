@@ -18,7 +18,8 @@ export const LOG_KEYS: Record<string, string> = {
  * Each key saves. An outcome key saves a visit with that outcome and the
  * text as its note. The `Note only` key saves the text as a note, with no
  * visit. On the edit page, a different key changes the outcome, or changes
- * a visit to a note, or a note to a visit.
+ * a visit to a note, or a note to a visit. The Save key of the edit page
+ * saves the text and keeps the outcome (REQ-CRM-BUTTON-001).
  */
 export const activityForm: RecordFormDef = {
   modules: [
@@ -42,6 +43,7 @@ export const activityForm: RecordFormDef = {
             ['not_interested', 'do_not_knock'],
             [NOTE_ONLY],
           ],
+          save: 'Save',
         },
       ],
     },
