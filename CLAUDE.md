@@ -68,7 +68,9 @@ Full procedure, with `gh` commands: `.claude/skills/workflow/SKILL.md`.
 - `infra/` - settings as code (OpenTofu). Apply only from `release`. Change these
   only here. `infra/cloudflare/`: zones, DNS, the tunnel. `infra/github/`:
   Actions token permissions, and the ruleset that protects `main` and
-  `release` (no force-push, no deletion). See each README.
+  `release` (no force-push, no deletion), and the `release` environment
+  that holds the Cloudflare token. `infra/tailscale/`: the tailnet policy
+  and machine tags. See each README.
 - `scripts/` - repo-level scripts (`promote-release.sh`, `test-deployment.sh`).
 - `requirements/` - the requirements index and its checker
   (`yarn requirements:check`).
