@@ -15,7 +15,12 @@ services:
     profiles: ["lan"]
     container_name: edge-caddy
     image: caddy:2.10-alpine
-    restart: "no"
+    # The same policy as the apps (REQ-SERVER-020). A restart of the Docker
+    # daemon does not change the boot id, so no deploy runs after it. Only the
+    # policy starts Caddy again. On the tunnel machine, deploy.sh removes the
+    # container (`down`). The daemon then has no container to start, so Caddy
+    # does not come back there (REQ-SERVER-016).
+    restart: unless-stopped
     ports:
       # The one port a LAN webserver opens (REQ-SERVER-002). deploy.sh sets
       # PUBLISH_ADDR=0.0.0.0 for this compose file only.
