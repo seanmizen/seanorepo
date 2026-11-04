@@ -13,7 +13,6 @@ import {
   findOrg,
   type Org,
   OUTCOMES,
-  orgPath,
   parseNumber,
 } from '../../../../org';
 import { type PageParts, renderPage } from '../../../../render';
@@ -21,7 +20,8 @@ import { Device } from '../../../../ui/Device';
 import { Lcd } from '../../../../ui/Lcd';
 import { RecordForm } from '../../../../ui/RecordForm';
 import { When } from '../../../../ui/When';
-import { sendNotFound } from '../../[slug]';
+import { orderSearch, parseOrder } from '../../../index';
+import { orderBack, sendNotFound } from '../../[slug]';
 
 /** The value of the key that saved `activity`. */
 const keyOf = (activity: Activity) => activity.outcome ?? NOTE_ONLY;
@@ -40,10 +40,13 @@ export const activityEditPage = ({
   org,
   activity,
   error,
+  search = '',
 }: {
   org: Org;
   activity: Activity;
   error?: string;
+  /** The query string of the running order (`orderSearch`). */
+  search?: string;
 }): PageParts => ({
   title: `Activity - ${org.name}`,
   device: (
@@ -56,7 +59,10 @@ export const activityEditPage = ({
           { label: 'Type', value: typeText(activity) },
         ]}
       />
-      <form method="post" action={activityPath(org.slug, activity.number)}>
+      <form
+        method="post"
+        action={`${activityPath(org.slug, activity.number)}${search}`}
+      >
         <RecordForm
           form={activityForm}
           values={{ note: activity.note ?? '', outcome: keyOf(activity) }}
@@ -74,7 +80,15 @@ const sendPage = (
   reply
     .code(props.error ? 400 : 200)
     .type('text/html; charset=utf-8')
-    .send(renderPage(request, activityEditPage(props)));
+    .send(
+      renderPage(
+        request,
+        activityEditPage({
+          ...props,
+          search: orderSearch(parseOrder(request.query)),
+        }),
+      ),
+    );
 
 /**
  * `GET` and `POST /orgs/<slug>/activity/<number>`: edit a visit or a note.
@@ -114,7 +128,7 @@ export const orgActivityEditRoute = (app: FastifyInstance, db: Database) => {
         found.activity,
         values,
       );
-      return reply.redirect(orgPath(found.org.slug), 303);
+      return reply.redirect(orderBack(found.org.slug, request), 303);
     },
   );
 };

@@ -31,7 +31,9 @@
  *    the footer row.
  * 4. Narrow: one column, in the order of the HTML. The ears of the rack
  *    go, each module has the full width, and each band row folds to two
- *    lines. The page margin is 1px.
+ *    lines. The page margin is 1px. On a page with the mode keys (Plan,
+ *    Work, Review), the app links are over the footer, as on a wide
+ *    screen.
  * 5. The root font is 14px on a wide screen and 17px on a narrow screen
  *    (see :root). So no column width of the page uses rem: the columns are
  *    fractions, and the page width is in px. The font change does not move
@@ -705,13 +707,34 @@ button.link:disabled {
 }
 /* The plate: the keys at the right of the glass, each with its caption
    under it. A caption tells what the key acts on, or why it is off
-   (REQ-CRM-BUTTON-001). */
+   (REQ-CRM-BUTTON-001). The mode keys (Plan, Work, Review) are the first
+   row, and the keys of the page are the second row. Each row has the width
+   of the widest row, in equal shares. */
 .plate {
+  display: grid;
+  align-content: center;
+  gap: 0.45em;
+}
+.plate-row {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 7.5em;
-  align-content: center;
   gap: 0.3em;
+}
+/* Four keys (the organisation page: Undo, Redo, Prev, Next) are two rows
+   of two, so the glass keeps the width for its readings. */
+.plate-row:has(> :nth-child(4)) {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, 7.5em);
+}
+/* The mode keys share the width of the keys under them, in thirds. Their
+   captions are short, so they do not widen the plate. */
+.plate-row.modes {
+  grid-auto-columns: minmax(5.5em, 1fr);
+}
+/* A plate with only the mode keys (Review) gives each the usual width. */
+.plate-row.modes:only-child {
+  grid-auto-columns: 7.5em;
 }
 .plate-key {
   display: grid;
@@ -766,7 +789,12 @@ button.link:disabled {
   .strip .count > .value {
     font-size: 1.7em;
   }
-  .plate {
+  .plate-row,
+  .plate-row.modes,
+  .plate-row.modes:only-child,
+  .plate-row:has(> :nth-child(4)) {
+    grid-auto-flow: column;
+    grid-template-columns: none;
     grid-auto-columns: minmax(0, 1fr);
   }
 }
@@ -897,14 +925,14 @@ button.link:disabled {
   border-radius: 2px;
   background: var(--line);
 }
-.key.latch[aria-pressed="true"] {
+.key.latch:is([aria-pressed="true"], [aria-current]) {
   background: var(--surface);
   box-shadow:
     inset 0 2px 0 var(--line),
     0 0 0 1px var(--line);
   font-weight: 700;
 }
-.key.latch[aria-pressed="true"]::before {
+.key.latch:is([aria-pressed="true"], [aria-current])::before {
   background: var(--accent);
   box-shadow: 0 0 4px var(--accent);
 }
@@ -1406,6 +1434,28 @@ button.link:disabled {
   }
 }
 
+/* A narrow screen, on a page with the mode keys: the mode keys on the
+   plate are the way between the views (apps/crm/docs/002-rack.md,
+   decision 1). So the app links leave the top of the page, and show over
+   the footer, as on a wide screen. They stay first in the HTML. */
+@media (width < 960px) {
+  body:has(.plate > .modes) {
+    display: flex;
+    flex-direction: column;
+  }
+  body:has(.plate > .modes) > .links {
+    order: 1;
+    margin-top: 2.5rem;
+  }
+  body:has(.plate > .modes) > .links ul {
+    margin: 0;
+  }
+  body:has(.plate > .modes) > .foot {
+    order: 1;
+    margin-top: 0.75rem;
+  }
+}
+
 /* Touch targets are at least 44px high on a narrow screen and under a
    finger, as in REQ-DENSE-006 of autosam. */
 @media (width < 960px), (pointer: coarse) {
@@ -1418,8 +1468,11 @@ button.link:disabled {
   }
 }
 /* A link key and a button key on the plate have one height and fill the
-   width of their caption. */
-.plate-key > .key {
+   width of their caption. A key that posts is in its own form. */
+.plate-key > form {
+  display: grid;
+}
+:is(.plate-key, .plate-key > form) > .key {
   box-sizing: border-box;
   width: 100%;
   height: 2.4em;
@@ -1659,6 +1712,18 @@ fieldset.field.problem {
   color: var(--muted);
 }
 
+/* Logged today (Review): the organisation, the time and the event have
+   fixed widths. The text has the rest. */
+.logged col.c-name {
+  width: 16em;
+}
+.logged col.c-when {
+  width: 12em;
+}
+.logged col.c-entry {
+  width: 12em;
+}
+
 /* A hidden visit, note or contact: the word "hidden" as a silkscreen
    label, then Restore. */
 .flag {
@@ -1683,6 +1748,33 @@ fieldset.field.problem {
   }
   .activity .chart tbody tr {
     grid-template-areas: "name name when" "text text act";
+  }
+  .logged .chart tbody tr {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "name name when" "entry text text";
+    padding: 0 0.6em;
+    background: var(--surface);
+  }
+  .logged .chart tbody tr:has(> th.c-gutter) {
+    grid-template-rows: 2.2em 1.5em 1.3em;
+    grid-template-areas: "gutter gutter gutter" "name name when" "entry text text";
+  }
+  .logged .chart td.c-when {
+    grid-area: when;
+    align-self: end;
+    font-size: 0.9em;
+  }
+  .logged .chart td.c-entry {
+    grid-area: entry;
+    padding-right: 0.75em;
+    font-size: 0.9em;
+  }
+  .logged .chart td.c-text {
+    grid-area: text;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.9em;
+    text-overflow: ellipsis;
   }
   .activity .chart tbody tr:has(> th.c-gutter) {
     grid-template-rows: 2.2em 1.5em 1.3em;

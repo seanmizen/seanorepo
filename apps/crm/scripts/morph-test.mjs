@@ -28,6 +28,8 @@
  *    history has no new entry (the post redirects to the same URL).
  * 4. Open an organisation from the list. The URL goes into history. Back
  *    shows the list, and Forward shows the organisation, with no load.
+ *    Next on the plate opens the next organisation of the running order,
+ *    with no load, and the display unit does not move.
  *    A link from /account to /account/passkeys adds the passkey script,
  *    and the Add a passkey key turns on. After one more morph of the same
  *    page, the key is still on.
@@ -361,17 +363,42 @@ try {
     'A changed URL goes into history.',
   );
   await page.locator('.chart tbody th a', { hasText: 'Clapham Cafe' }).click();
-  await page.waitForURL(`${BASE}/orgs/clapham-cafe`);
+  // The link carries the running order of the list (`?at=2`).
+  const atCafe = (url) => url.pathname === '/orgs/clapham-cafe';
+  await page.waitForURL(atCafe);
   await page.waitForFunction(() => document.title.startsWith('Clapham Cafe'));
   await page.goBack();
   await page.waitForURL(`${BASE}/`);
   await page.waitForFunction(() => document.title.startsWith('Organisations'));
   assert.equal((await names(page)).length, 4);
   await page.goForward();
-  await page.waitForURL(`${BASE}/orgs/clapham-cafe`);
+  await page.waitForURL(atCafe);
   await page.waitForFunction(() => document.title.startsWith('Clapham Cafe'));
   assert.equal(await page.evaluate(() => window.morphMark), 'still here');
   console.log('ok: a link goes into history, and Back and Forward morph');
+
+  // 5: Next on the plate opens the next organisation of the running order
+  // in place, and the rack does not move (REQ-CRM-MORPH-001).
+  const rackBox = () =>
+    page.evaluate(() => {
+      const box = document
+        .querySelector('.unit.display')
+        .getBoundingClientRect();
+      return { top: box.top, height: box.height };
+    });
+  const rackBefore = await rackBox();
+  const nextName = await page.locator('#walk-next-caption').textContent();
+  await page.locator('#walk-next').click();
+  await page.waitForURL((url) => url.searchParams.get('at') === '3');
+  await page.waitForFunction(
+    (name) => document.title.startsWith(name),
+    nextName,
+  );
+  assert.equal(await page.evaluate(() => window.morphMark), 'still here');
+  assert.deepEqual(await rackBox(), rackBefore, 'The rack did not move.');
+  console.log(
+    `ok: Next opens ${nextName} in place, and the rack does not move`,
+  );
 
   await page.goto(`${BASE}/account`);
   await page.evaluate(() => {

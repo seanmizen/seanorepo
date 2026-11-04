@@ -82,6 +82,16 @@ const instantOf = (value: string) => {
 export const today = () => londonParts(new Date()).date;
 
 /**
+ * The first and the last instant of the London day `date`, as ISO 8601 UTC
+ * times, the form that the database keeps: a time `t` is on that day when
+ * `from <= t < to`.
+ */
+export const dayRange = (date: string) => ({
+  from: instantOf(date).toISOString(),
+  to: instantOf(addDays(date, 1)).toISOString(),
+});
+
+/**
  * `value` as a person reads it: `2026-Nov-03`, or `2026-Nov-03 13:31` with
  * `time`. A date with no time never shows a time.
  */

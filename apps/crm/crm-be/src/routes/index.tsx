@@ -8,6 +8,7 @@ import {
   isoDateTime,
   today,
 } from '../dates';
+import { type ModeCounts, modeCounts, modeKeys } from '../modes';
 import {
   formText,
   isStage,
@@ -288,6 +289,77 @@ const orderText = (path: ListPath, { sort, dir }: ListQuery) => {
   return path === '/' ? `In each group, ${text}` : `S${text.slice(1)}`;
 };
 
+/**
+ * The columns of a band of organisations, after the name: Stage, Next
+ * action, Due date, Last activity (Date added with that sort) and
+ * Postcode. The legend of the column that sets the order has its arrow.
+ */
+export const listColumns = ({ sort, dir }: Pick<ListQuery, 'sort' | 'dir'>) => [
+  { label: 'Stage', name: 'c-stage' },
+  { label: 'Next action', name: 'c-action' },
+  {
+    label: 'Due date',
+    name: 'c-due',
+    order: sort === 'due' ? ('asc' as const) : undefined,
+  },
+  sort === 'added'
+    ? { label: SORTS.added.text, name: 'c-last', order: dir }
+    : { label: 'Last activity', name: 'c-last' },
+  { label: 'Postcode', name: 'c-postcode' },
+];
+
+/**
+ * The groups of a band of organisations: the rows of each group of
+ * `groups`, in the order of `rows`. Each row links to `href(row, index)`,
+ * where `index` is the place of the row in `rows`, from 0, so the link
+ * can carry the running order. The LED of a row is lit when its next
+ * action is due on `date` or before.
+ */
+export const bandGroups = ({
+  groups,
+  rows,
+  date,
+  sort,
+  href,
+}: {
+  groups: ListGroup[];
+  rows: ListRow[];
+  date: string;
+  sort: Sort;
+  href: (row: ListRow, index: number) => string;
+}): BandGroup[] =>
+  groups.map((group) => ({
+    name: group.name,
+    count: group.count,
+    rows: rows
+      .filter((row) => row.grp === group.key)
+      .map((row) => ({
+        href: href(row, rows.indexOf(row)),
+        name: row.name,
+        led: row.next_action_on !== null && row.next_action_on <= date,
+        cells: [
+          { value: STAGES[row.stage] },
+          row.next_action
+            ? { value: row.next_action, title: row.next_action }
+            : { value: <span className="none">None</span> },
+          {
+            value: <DueCell date={row.next_action_on} days={group.days} />,
+          },
+          {
+            value: (
+              <When
+                value={sort === 'added' ? row.created_at : row.last_activity}
+                time={false}
+              />
+            ),
+          },
+          {
+            value: row.postcode || <span className="none">None</span>,
+          },
+        ],
+      })),
+  }));
+
 /** The legend of the gutter of the band, for each grouping. */
 const GUTTERS: Record<Sort, string> = {
   due: 'Due',
@@ -341,6 +413,8 @@ export const listPage = ({
   total,
   counts,
   groups: listGroups,
+  start,
+  modes,
 }: {
   path: ListPath;
   date: string;
@@ -351,6 +425,10 @@ export const listPage = ({
   counts: number[];
   /** The groups of the band, in order (`listOrgs`). */
   groups: ListGroup[];
+  /** The first organisation of the whole list, for Start and Work. */
+  start: OrderRow | undefined;
+  /** The counts of the mode keys (`modeCounts`). */
+  modes: ModeCounts;
 }): PageParts => {
   const { q, stage, sort, dir, page } = query;
   const grouping = groupingOf(path, sort);
@@ -358,37 +436,17 @@ export const listPage = ({
   const firstRow = (page - 1) * PAGE_SIZE + 1;
   const first = rows[0];
   const noMatch = total === 0 && q !== '' && stage === '';
-  const groups: BandGroup[] = listGroups.map((group) => ({
-    name: group.name,
-    count: group.count,
-    rows: rows
-      .filter((row) => row.grp === group.key)
-      .map((row) => ({
-        href: orgPath(row.slug),
-        name: row.name,
-        led: row.next_action_on !== null && row.next_action_on <= date,
-        cells: [
-          { value: STAGES[row.stage] },
-          row.next_action
-            ? { value: row.next_action, title: row.next_action }
-            : { value: <span className="none">None</span> },
-          {
-            value: <DueCell date={row.next_action_on} days={group.days} />,
-          },
-          {
-            value: (
-              <When
-                value={sort === 'added' ? row.created_at : row.last_activity}
-                time={false}
-              />
-            ),
-          },
-          {
-            value: row.postcode || <span className="none">None</span>,
-          },
-        ],
-      })),
-  }));
+  const order: RunningOrder = { path, query: { ...query, page: 1 }, at: null };
+  const groups = bandGroups({
+    groups: listGroups,
+    rows,
+    date,
+    sort,
+    href: (row, index) => orderHref(row.slug, order, firstRow + index),
+  });
+  const startHref = start ? orderHref(start.slug, order, 1) : undefined;
+  /** The reason that Start and Work are off: the list is empty. */
+  const empty = q || stage ? 'No match' : 'No organisations';
   const keys: PlateKey[] = [
     page > 1
       ? {
@@ -408,6 +466,9 @@ export const listPage = ({
           rel: 'next',
         }
       : { id: 'page-next', label: 'Next', caption: 'Last page', off: true },
+    start && startHref
+      ? { id: 'start', label: 'Start', caption: start.name, href: startHref }
+      : { id: 'start', label: 'Start', caption: empty, off: true },
   ];
   const { sort: sortField, dir: dirField } = sortFields(path, query);
   return {
@@ -447,6 +508,13 @@ export const listPage = ({
             },
           ]}
           keys={keys}
+          modes={modeKeys({
+            mode: path === '/' ? 'plan' : null,
+            work: startHref
+              ? { href: startHref, caption: `${total} in list` }
+              : { caption: empty },
+            counts: modes,
+          })}
         />
         <ControlUnit>
           <form method="get" action={path}>
@@ -522,19 +590,7 @@ export const listPage = ({
         seam="Due now"
         nameLabel="Organisation"
         orderName={sort === 'name' ? dir : undefined}
-        columns={[
-          { label: 'Stage', name: 'c-stage' },
-          { label: 'Next action', name: 'c-action' },
-          {
-            label: 'Due date',
-            name: 'c-due',
-            order: sort === 'due' ? 'asc' : undefined,
-          },
-          sort === 'added'
-            ? { label: SORTS.added.text, name: 'c-last', order: dir }
-            : { label: 'Last activity', name: 'c-last' },
-          { label: 'Postcode', name: 'c-postcode' },
-        ]}
+        columns={listColumns(query)}
         groups={groups}
         empty={
           noMatch ? (
@@ -620,6 +676,172 @@ const ORDER: Record<Sort, string> = {
   name: 'name COLLATE NOCASE',
 };
 
+/** The parameters of `WHERE` for the search and the stage of `query`. */
+const filterOf = (query: ListQuery) => ({
+  q: query.q,
+  name: `%${likeText(query.q)}%`,
+  postcode: `%${likeText(query.q.toUpperCase().replace(/\s+/g, ''))}%`,
+  stage: query.stage,
+});
+
+/** The parameters of `DUE_GROUP` on the London day `date`. */
+const daysOf = (date: string) => ({ today: date, week: addDays(date, 7) });
+
+/**
+ * The SQL of every organisation that matches `query` on the page `path`,
+ * in the order of the list: group by group, and in each group by the
+ * sort. `listOrgs` adds the page to it, and `orderedOrgs` takes all of it,
+ * so the list and the running order have one order.
+ */
+const orderedSql = (query: ListQuery, path: ListPath) => {
+  const grouping = groupingOf(path, query.sort);
+  const descending = query.sort !== 'due' && query.dir === 'desc';
+  const groupDirection = grouping !== 'due' && descending ? ' DESC' : '';
+  const direction = descending ? ' DESC' : '';
+  return `SELECT slug, name, stage, next_action, next_action_on, postcode,
+       created_at, ${DUE_GROUP} AS due_group, ${GROUPS[grouping]} AS grp,
+       max(
+         created_at,
+         coalesce((SELECT max(at) FROM visit
+                   WHERE visit.organisation_id = organisation.id
+                     AND visit.hidden_at IS NULL), ''),
+         coalesce((SELECT max(created_at) FROM note
+                   WHERE note.organisation_id = organisation.id
+                     AND note.hidden_at IS NULL), '')
+       ) AS last_activity
+     FROM organisation ${WHERE}
+     ORDER BY grp${groupDirection}, ${ORDER[query.sort]}${direction},
+       name COLLATE NOCASE, slug`;
+};
+
+/** One organisation of a running order: its slug and its name. */
+export type OrderRow = Pick<Org, 'slug' | 'name'>;
+
+/**
+ * Every organisation that matches `query` on the page `path`, in the order
+ * of the list, on all pages. The crm has one seller, so the list is short
+ * enough to read whole for each organisation page.
+ */
+export const orderedOrgs = (
+  db: Database,
+  query: ListQuery,
+  date: string,
+  path: ListPath = '/',
+): OrderRow[] =>
+  db
+    .query<OrderRow, ReturnType<typeof filterOf> & ReturnType<typeof daysOf>>(
+      `SELECT slug, name FROM (${orderedSql(query, path)});`,
+    )
+    .all({ ...filterOf(query), ...daysOf(date) });
+
+/**
+ * The running order of an organisation page (`apps/crm/docs/002-rack.md`):
+ * the list that Sean came from, and the place of the organisation in it.
+ * There is no round record: the URL of the organisation page holds all of
+ * it, as a short query string (`orderSearch`).
+ *
+ * - `path`: the list. `/` (the Plan) is the default. `list=orgs` is the
+ *   address book.
+ * - `query`: the search, the stage and the sort of the list, as in its own
+ *   URL. The running order has no page: it is the whole list.
+ * - `at`: the place of the organisation in the list when Sean opened it,
+ *   from 1. A save can move the organisation in the list (a new due date)
+ *   or out of it (a new stage), and `at` keeps Prev and Next on the
+ *   organisations that were before it and after it.
+ */
+export interface RunningOrder {
+  path: ListPath;
+  query: ListQuery;
+  at: number | null;
+}
+
+/**
+ * Read the running order from the query of an organisation page, or of a
+ * post under it. A value that is not valid gives the default, as in
+ * `parseListQuery`. With no query, the running order is the Plan, and the
+ * place is where the organisation is now.
+ */
+export const parseOrder = (query: unknown): RunningOrder => {
+  const params = (query ?? {}) as Record<string, unknown>;
+  const path: ListPath = formText(params.list) === 'orgs' ? '/orgs' : '/';
+  const at = Number(formText(params.at));
+  return {
+    path,
+    query: { ...parseListQuery(params, path), page: 1 },
+    at: Number.isInteger(at) && at > 0 ? at : null,
+  };
+};
+
+/**
+ * The query string of a running order, with `?`, or '' for the Plan with
+ * no search, stage, sort or place. The fields are those of the list URL
+ * (`listHref`), after `list=orgs` for the address book, then `at`, then
+ * `extra` (for example `hidden=1`). It has no empty parameter, and no
+ * UUID (REQ-CRM-ID-001).
+ */
+export const orderSearch = (
+  order: RunningOrder,
+  extra: Record<string, string> = {},
+) => {
+  const params = new URLSearchParams();
+  if (order.path === '/orgs') params.set('list', 'orgs');
+  const list = listHref(order.path, { ...order.query, page: 1 });
+  for (const [name, value] of new URLSearchParams(list.split('?')[1] ?? '')) {
+    params.set(name, value);
+  }
+  if (order.at) params.set('at', String(order.at));
+  for (const [name, value] of Object.entries(extra)) params.set(name, value);
+  const search = params.toString();
+  return search ? `?${search}` : '';
+};
+
+/** The URL of the organisation `slug` at the place `at` of `order`. */
+export const orderHref = (slug: string, order: RunningOrder, at: number) =>
+  `${orgPath(slug)}${orderSearch({ ...order, at })}`;
+
+/** A neighbour in a running order: the organisation and its place now. */
+export interface OrderStep extends OrderRow {
+  at: number;
+}
+
+/**
+ * Where the organisation `slug` is in its running order, for Prev and Next
+ * on its plate (`apps/crm/docs/002-rack.md`, Running order).
+ *
+ * - `total`: the number of organisations in the list now.
+ * - `place`: the place of the organisation in the list now, from 1, or
+ *   null when it is not in the list (a save moved it out).
+ * - `first`: the first organisation of the list, for Start and Work.
+ * - `prev` and `next`: the organisations before it and after it, or null
+ *   at an end of the list.
+ *
+ * The neighbours come from the place where the organisation was (`at`), in
+ * the list without the organisation. A save moves only this organisation,
+ * so the others keep their order, and Next opens the organisation that was
+ * after it, also when the save moved it to the end or out of the list.
+ * With no `at`, the place is where the organisation is now.
+ */
+export const walkOrder = (
+  db: Database,
+  order: RunningOrder,
+  slug: string,
+  date: string,
+) => {
+  const rows = orderedOrgs(db, order.query, date, order.path);
+  const here = rows.findIndex((row) => row.slug === slug);
+  const was = order.at !== null ? order.at - 1 : here;
+  const others = rows.filter((row) => row.slug !== slug);
+  const step = (row: OrderRow | undefined): OrderStep | null =>
+    row ? { ...row, at: rows.indexOf(row) + 1 } : null;
+  return {
+    total: rows.length,
+    place: here >= 0 ? here + 1 : null,
+    first: step(rows[0]),
+    prev: was > 0 ? step(others[was - 1]) : null,
+    next: was >= 0 ? step(others[was]) : null,
+  };
+};
+
 /** The name of a group of the band, from its key. */
 const groupName = (grouping: Sort, key: number | string) => {
   if (grouping === 'due') return DUE_GROUPS[Number(key)]?.name ?? 'None';
@@ -642,13 +864,8 @@ export const listOrgs = (
   date: string,
   path: ListPath = '/',
 ) => {
-  const filter = {
-    q: query.q,
-    name: `%${likeText(query.q)}%`,
-    postcode: `%${likeText(query.q.toUpperCase().replace(/\s+/g, ''))}%`,
-    stage: query.stage,
-  };
-  const days = { today: date, week: addDays(date, 7) };
+  const filter = filterOf(query);
+  const days = daysOf(date);
   const counts = DUE_GROUPS.map(() => 0);
   for (const row of db
     .query<{ due_group: number; n: number }, typeof filter & typeof days>(
@@ -688,24 +905,9 @@ export const listOrgs = (
             days: true,
           }));
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
-  const direction = descending ? ' DESC' : '';
   const rows = db
     .query<ListRow, typeof filter & typeof days & { offset: number }>(
-      `SELECT slug, name, stage, next_action, next_action_on, postcode,
-         created_at, ${DUE_GROUP} AS due_group, ${GROUPS[grouping]} AS grp,
-         max(
-           created_at,
-           coalesce((SELECT max(at) FROM visit
-                     WHERE visit.organisation_id = organisation.id
-                       AND visit.hidden_at IS NULL), ''),
-           coalesce((SELECT max(created_at) FROM note
-                     WHERE note.organisation_id = organisation.id
-                       AND note.hidden_at IS NULL), '')
-         ) AS last_activity
-       FROM organisation ${WHERE}
-       ORDER BY grp${groupDirection}, ${ORDER[query.sort]}${direction},
-         name COLLATE NOCASE, slug
-       LIMIT ${PAGE_SIZE} OFFSET $offset;`,
+      `${orderedSql(query, path)} LIMIT ${PAGE_SIZE} OFFSET $offset;`,
     )
     .all({ ...filter, ...days, offset: (page - 1) * PAGE_SIZE });
   return { rows, total, page, counts, groups };
@@ -760,6 +962,8 @@ export const listRoute = (app: FastifyInstance, db: Database) => {
         date,
         path,
       );
+      const start =
+        page === 1 ? rows[0] : orderedOrgs(db, query, date, path)[0];
       return reply.type('text/html; charset=utf-8').send(
         renderPage(
           request,
@@ -771,6 +975,8 @@ export const listRoute = (app: FastifyInstance, db: Database) => {
             total,
             counts,
             groups,
+            start,
+            modes: modeCounts(db, date),
           }),
         ),
       );

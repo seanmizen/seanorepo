@@ -10,7 +10,7 @@ that sometimes shows.
 
 - **Status:** active
 - **Source:** sean
-- **Origin:** #1089, #1091
+- **Origin:** #1089, #1091, #1125
 - **Type:** constraint
 - **Priority:** P2
 - **Statement:** While a button of the crm cannot act, the crm shall show
@@ -26,7 +26,9 @@ that sometimes shows.
   after the button. `ui/Key.tsx` holds the rule: a key with `off` (the
   reason) is off. The buttons that can be off are `Undo` and `Redo` (on
   the plate of the organisation page), `Prev` and `Next` (the pager of the
-  list), each with the caption under it as its reason, `Show hidden` (the
+  list, and the running order on the plate of the organisation page),
+  `Start` (the list) and `Work` (the mode keys), each with the caption
+  under it as its reason, `Show hidden` (the
   Activity band) and `Clear` (the Next action module), `Everywhere else` and the `Revoke` of this session
   (`/account/sessions`), `Reset demo data` (`/account`), `Add a passkey`
   (`/account/passkeys` and the 403 page), `Delete` (`/account/passkeys`),

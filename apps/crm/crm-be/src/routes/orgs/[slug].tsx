@@ -19,6 +19,7 @@ import {
   type RecordFormDef,
 } from '../../forms/form';
 import { organisationForm } from '../../forms/organisation';
+import { type ModeCounts, modeCounts, modeKeys } from '../../modes';
 import {
   activityPath,
   contactPath,
@@ -47,6 +48,13 @@ import { Module } from '../../ui/Module';
 import { Rack } from '../../ui/Rack';
 import { RecordForm, RecordFormRow } from '../../ui/RecordForm';
 import { When } from '../../ui/When';
+import {
+  orderHref,
+  orderSearch,
+  parseOrder,
+  type RunningOrder,
+  walkOrder,
+} from '../index';
 
 /** The labels of the fields of `form`, by name. */
 const labelsOf = (form: RecordFormDef): Record<string, string> =>
@@ -352,13 +360,16 @@ const ActivityBand = ({
   data,
   hidden,
   hiddenCount,
+  order,
 }: {
   org: Org;
   data: ActivityData;
   hidden: boolean;
   /** The number of hidden visits, notes and contacts. */
   hiddenCount: number;
+  order: RunningOrder;
 }) => {
+  const search = orderSearch(order);
   const events = [...data.events]
     .reverse()
     .filter((event) => eventShows(data, event, hidden));
@@ -385,8 +396,8 @@ const ActivityBand = ({
         {
           value: (
             <RowActions
-              edit={line.edit}
-              restore={line.restore}
+              edit={line.edit && `${line.edit}${search}`}
+              restore={line.restore && `${line.restore}${search}`}
               hidden={hidden}
             />
           ),
@@ -409,6 +420,7 @@ const ActivityBand = ({
       info={`${events.length} ${events.length === 1 ? 'event' : 'events'}, newest first. Undo and Redo are on the plate.`}
       tools={
         <form method="get" action={`${orgPath(org.slug)}#activity`}>
+          <OrderFields order={order} />
           {!hidden && <input type="hidden" name="hidden" value="1" />}
           <Key
             id="show-hidden"
@@ -449,6 +461,7 @@ const ContactsBand = ({
   hidden,
   values,
   problem,
+  search,
 }: {
   org: Org;
   contacts: Contact[];
@@ -456,6 +469,8 @@ const ContactsBand = ({
   /** The values of the last row after an error. */
   values?: FormValues;
   problem?: FieldProblem;
+  /** The query string of the running order (`orderSearch`). */
+  search: string;
 }) => (
   <Band
     id="contacts"
@@ -471,7 +486,7 @@ const ContactsBand = ({
       <form
         id="add-contact"
         method="post"
-        action={orgPath(org.slug, 'contacts')}
+        action={`${orgPath(org.slug, 'contacts')}${search}`}
       />
     }
     nameLabel={fieldsOf(contactForm)[0].label}
@@ -509,11 +524,11 @@ const ContactsBand = ({
             {
               value: (
                 <RowActions
-                  edit={contactPath(org.slug, person.number)}
-                  remove={contactPath(org.slug, person.number, 'remove')}
+                  edit={`${contactPath(org.slug, person.number)}${search}`}
+                  remove={`${contactPath(org.slug, person.number, 'remove')}${search}`}
                   restore={
                     person.hidden
-                      ? contactPath(org.slug, person.number, 'restore')
+                      ? `${contactPath(org.slug, person.number, 'restore')}${search}`
                       : undefined
                   }
                   hidden={hidden}
@@ -550,13 +565,13 @@ const addressOf = (org: Org) =>
  * The Details band: the address, the source, the lawful basis and the date
  * added, as a `<dl>`, with Edit in its head. An empty value says None.
  */
-const DetailsBand = ({ org }: { org: Org }) => (
+const DetailsBand = ({ org, search }: { org: Org; search: string }) => (
   <BandSection
     id="details"
     title="Details"
     name="details"
     span={4}
-    tools={<a href={orgPath(org.slug, 'edit')}>Edit</a>}
+    tools={<a href={`${orgPath(org.slug, 'edit')}${search}`}>Edit</a>}
   >
     <dl className="sheet">
       {(
@@ -688,6 +703,49 @@ export interface OrgProblem {
   fixKey?: string;
 }
 
+/** The place of an organisation in its running order (`walkOrder`). */
+export type Walk = ReturnType<typeof walkOrder>;
+
+/**
+ * The fields of the running order as hidden inputs, for a GET form: a GET
+ * form drops the query of its action, so it sends the order as fields.
+ */
+export const OrderFields = ({ order }: { order: RunningOrder }) =>
+  [...new URLSearchParams(orderSearch(order).slice(1))].map(([name, value]) => (
+    <input key={name} type="hidden" name={name} value={value} />
+  ));
+
+/**
+ * Prev and Next on the plate of an organisation page: the organisations
+ * before it and after it in its running order. Each one is a link that
+ * keeps the order. Each caption names the organisation that the key
+ * opens. At an end the key is off, and its caption says why: First in
+ * list, Last in list (REQ-CRM-BUTTON-001).
+ */
+const walkKeys = (order: RunningOrder, walk: Walk): PlateKey[] => {
+  const lost = walk.total === 0 || (order.at === null && walk.place === null);
+  return (['prev', 'next'] as const).map((side) => {
+    const step = walk[side];
+    const id = `walk-${side}`;
+    const label = side === 'prev' ? 'Prev' : 'Next';
+    if (step) {
+      return {
+        id,
+        label,
+        caption: step.name,
+        href: orderHref(step.slug, order, step.at),
+        rel: side,
+      };
+    }
+    const caption = lost
+      ? 'Not in list'
+      : side === 'prev'
+        ? 'First in list'
+        : 'Last in list';
+    return { id, label, caption, off: true };
+  });
+};
+
 /** The due keys of the Next action module: each one sets a date. */
 const DUE_KEYS = [
   { label: 'Tomorrow', days: 1 },
@@ -735,6 +793,9 @@ export const orgPage = ({
   problem,
   contact,
   date = today(),
+  order,
+  walk,
+  modes,
 }: {
   org: Org;
   /** Every contact, with the removed (hidden) ones. */
@@ -748,7 +809,14 @@ export const orgPage = ({
   /** The values of the Add contact row after an error. */
   contact?: FormValues;
   date?: string;
+  /** The running order of the page, from its URL (`parseOrder`). */
+  order: RunningOrder;
+  /** The place of the organisation in its running order (`walkOrder`). */
+  walk: Walk;
+  /** The counts of the mode keys (`modeCounts`). */
+  modes: ModeCounts;
 }): PageParts => {
+  const search = orderSearch(order);
   const entries = [...activity.entries.values()];
   const hiddenCount =
     entries.filter((entry) => entry.hidden_at !== null).length +
@@ -767,7 +835,7 @@ export const orgPage = ({
           label,
           caption: `${label}: ${describe(org, activity, state.event).short}`,
           form: {
-            action: orgPath(org.slug, kind),
+            action: `${orgPath(org.slug, kind)}${search}`,
             method: 'post',
             fields: {
               event: String(state.event.number),
@@ -789,10 +857,26 @@ export const orgPage = ({
           keys={[
             plateKey('undo', 'Undo', undo),
             plateKey('redo', 'Redo', redo),
+            ...walkKeys(order, walk),
           ]}
+          modes={modeKeys({
+            mode: 'work',
+            work: walk.first
+              ? {
+                  href: orderHref(walk.first.slug, order, 1),
+                  caption: walk.place
+                    ? `${walk.place} of ${walk.total}`
+                    : 'Not in list',
+                }
+              : { caption: 'No match' },
+            counts: modes,
+          })}
         />
         <ControlUnit>
-          <form method="post" action={orgPath(org.slug, 'activity')}>
+          <form
+            method="post"
+            action={`${orgPath(org.slug, 'activity')}${search}`}
+          >
             <RecordForm
               form={activityForm}
               id="log"
@@ -808,7 +892,10 @@ export const orgPage = ({
             span={3}
             problem={problem?.part === 'stage'}
           >
-            <form method="post" action={orgPath(org.slug, 'stage')}>
+            <form
+              method="post"
+              action={`${orgPath(org.slug, 'stage')}${search}`}
+            >
               <input
                 type="hidden"
                 name="next_action"
@@ -841,7 +928,10 @@ export const orgPage = ({
             span={4}
             problem={overdue || nextProblem !== undefined}
           >
-            <form method="post" action={orgPath(org.slug, 'stage')}>
+            <form
+              method="post"
+              action={`${orgPath(org.slug, 'stage')}${search}`}
+            >
               <input type="hidden" name="stage" value={org.stage} />
               <Field label="Action">
                 <textarea
@@ -882,7 +972,10 @@ export const orgPage = ({
                 </Keys>
               </fieldset>
             </form>
-            <form method="post" action={orgPath(org.slug, 'stage')}>
+            <form
+              method="post"
+              action={`${orgPath(org.slug, 'stage')}${search}`}
+            >
               <input type="hidden" name="stage" value={org.stage} />
               <input type="hidden" name="next_action" value="" />
               <input type="hidden" name="next_action_on" value="" />
@@ -911,13 +1004,15 @@ export const orgPage = ({
           hidden={hidden}
           values={contact}
           problem={problem?.part === 'contact' ? problem.field : undefined}
+          search={search}
         />
-        <DetailsBand org={org} />
+        <DetailsBand org={org} search={search} />
         <ActivityBand
           org={org}
           data={activity}
           hidden={hidden}
           hiddenCount={hiddenCount}
+          order={order}
         />
       </Bands>
     ),
@@ -951,8 +1046,12 @@ export const sendOrgPage = (
     contact,
     hidden,
   }: { problem?: OrgProblem; contact?: FormValues; hidden?: boolean } = {},
-) =>
-  reply
+) => {
+  const date = today();
+  // The running order is in the query of the page, and of each post from
+  // it: each form of the page posts to its path with the same query.
+  const order = parseOrder(request.query);
+  return reply
     .code(problem ? 400 : 200)
     .type('text/html; charset=utf-8')
     .send(
@@ -966,16 +1065,35 @@ export const sendOrgPage = (
           hidden,
           problem,
           contact,
+          date,
+          order,
+          walk: walkOrder(db, order, org.slug, date),
+          modes: modeCounts(db, date),
         }),
       ),
     );
+};
 
 /**
  * The address of the Activity band of the organisation with `slug`, after a
  * post from it. With `hidden`, the page keeps the hidden records on view.
+ * The address keeps the running order of the post, as `orderBack` does.
  */
-export const activityBack = (slug: string, hidden: boolean) =>
-  `${orgPath(slug)}${hidden ? '?hidden=1' : ''}#activity`;
+export const activityBack = (
+  slug: string,
+  hidden: boolean,
+  request: FastifyRequest,
+) =>
+  `${orgPath(slug)}${orderSearch(parseOrder(request.query), hidden ? { hidden: '1' } : {})}#activity`;
+
+/**
+ * The address of the organisation page with `slug` after a post from it or
+ * from one of its edit pages: the page in the running order of the post.
+ * Each form posts with the query of the page (`orderSearch`), so a save
+ * keeps Prev and Next on the same list.
+ */
+export const orderBack = (slug: string, request: FastifyRequest) =>
+  `${orgPath(slug)}${orderSearch(parseOrder(request.query))}`;
 
 /**
  * `GET /orgs/<slug>`. The static route `/orgs/new` wins over this one
