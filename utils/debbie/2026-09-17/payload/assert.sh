@@ -513,6 +513,25 @@ else
     sk "HEAD is on $RELEASE_BRANCH" "setup-server-environment.sh checks it out"
 fi
 
+# The .deb files in the apt cache that are not a pending upgrade, one per line
+# (REQ-DEPLOY-004). apt-daily.service downloads each pending upgrade into the
+# cache (`apt-get -d dist-upgrade`), so such a file is not a leftover. A file
+# is a pending upgrade when `apt-get -s dist-upgrade` plans to install its
+# package at its version. Prints nothing when the cache holds only pending
+# upgrades.
+apt_cache_leftovers() {
+    local plan f pkg ver
+    plan="$(apt-get -s -o Debug::NoLocking=1 dist-upgrade 2> /dev/null)"
+    for f in /var/cache/apt/archives/*.deb; do
+        [ -e "$f" ] || continue
+        pkg="$(dpkg-deb -f "$f" Package)"
+        ver="$(dpkg-deb -f "$f" Version)"
+        # A plan line: `Inst <package> [<old version>] (<new version> <origin> [<arch>])`.
+        awk -v p="$pkg" -v v="($ver " '$1 == "Inst" && $2 == p && index($0, v) { found = 1 } END { exit !found }' <<< "$plan" \
+            || echo "$f"
+    done
+}
+
 # REQ-DEPLOY-004 - the other half of `yarn prod:docker`. Docker above proves the
 # machine can run the containers. This proves it can get as far as asking.
 #
@@ -561,13 +580,15 @@ if [ "$PHASE" = provisioned ]; then
     # The tools setup-developer-environment.sh installs for its own sake.
     # shist comes from its GitHub release: brew on macOS, a checksummed
     # tarball on Linux. No machine needs a Go toolchain.
-    check "apt cache is empty"        '[ -z "$(ls -A /var/cache/apt/archives/*.deb 2>/dev/null)" ]'
+    apt_leftovers="$(apt_cache_leftovers)"
+    [ -n "$apt_leftovers" ] && printf '%s\n' "$apt_leftovers" | sed 's/^/  /'
+    check "apt cache holds only pending upgrades" '[ -z "$apt_leftovers" ]'
     check "shist installed"           "sudo -n test -x ~$DEPLOY_USER/.local/bin/shist"
     check "shist runs"                "sudo -n -u $DEPLOY_USER ~$DEPLOY_USER/.local/bin/shist --help > /dev/null 2>&1"
     check "git config came from config-anywhere" \
         "sudo -n test -s ~$DEPLOY_USER/.gitconfig"
 else
-    sk "apt cache is empty"           "setup-server-environment.sh clears it"
+    sk "apt cache holds only pending upgrades" "setup-server-environment.sh clears it"
     sk "shist installed"              "setup-developer-environment.sh installs it"
     sk "shist runs"                   "setup-developer-environment.sh installs it"
     sk "git config came from config-anywhere" "setup-developer-environment.sh applies it"
