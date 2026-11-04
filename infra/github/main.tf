@@ -14,6 +14,26 @@ resource "github_workflow_repository_permissions" "seanorepo" {
   can_approve_pull_request_reviews = true
 }
 
+# The environment that holds the Cloudflare token of infra-apply.yml. Only
+# the release branch can deploy to it, so a workflow on any other branch,
+# a PR included, cannot read the token. The secret value is not in OpenTofu:
+# set it with `gh secret set CLOUDFLARE_API_TOKEN --env release`.
+resource "github_repository_environment" "release" {
+  repository  = local.repository
+  environment = "release"
+
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "release" {
+  repository     = local.repository
+  environment    = github_repository_environment.release.environment
+  branch_pattern = "release"
+}
+
 # Nobody can force-push to main or release, or delete them. There is no
 # bypass. Normal pushes, squash merges and `yarn release` (a fast-forward)
 # still work. For a deliberate history rewrite, set enforcement to

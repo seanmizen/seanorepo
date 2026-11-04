@@ -109,7 +109,7 @@ cf_api() {
   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$@"
 }
 if [ "$stack" = cloudflare ] && [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [[ "${1:-}" =~ ^(init|plan|apply|destroy|import|state|output|refresh)$ ]] && [[ " $* " != *" -backend=false "* ]]; then
-  echo "tofu: CLOUDFLARE_API_TOKEN is not set. The R2 state needs it. Put it in $secrets, or in the repo secret in CI. See README.md." >&2
+  echo "tofu: CLOUDFLARE_API_TOKEN is not set. The R2 state needs it. Put it in $secrets, or in the secret of the GitHub environment release in CI. See README.md." >&2
   exit 1
 fi
 if [ "$stack" = cloudflare ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then

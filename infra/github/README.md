@@ -7,6 +7,7 @@ whatever lands on `release`, so these settings decide who can deploy.
 | ------- | --- |
 | Actions token: read by default | A compromised third-party action cannot push. A workflow that needs more asks for it (`permissions:`). |
 | Ruleset on `main` and `release`: no force-push, no deletion, no bypass | Nobody rewinds or deletes a deploy branch. `yarn release` fast-forwards, so it still works. |
+| Environment `release`, for the `release` branch only | It holds the Cloudflare token of the "Infra apply" workflow. A workflow on another branch cannot read it. OpenTofu does not hold the secret value. |
 
 ## Use
 

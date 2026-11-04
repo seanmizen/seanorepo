@@ -3,6 +3,10 @@ name: Infra apply (OpenTofu)
 # Applies the cloudflare stack when release moves, so a DNS record in git
 # goes live without a manual apply. The state is in R2 (versions.tf). The
 # github stack needs an admin token, so it stays manual (infra/github).
+#
+# The Cloudflare token is a secret of the GitHub environment `release`. Only
+# the release branch can use that environment (infra/github/main.tf), so a
+# workflow on any other branch gets no token.
 
 on:
   push:
@@ -27,6 +31,7 @@ jobs:
     timeout-minutes: 15
     # workflow_dispatch can name any branch. infra/tofu also refuses others.
     if: github.ref == 'refs/heads/release'
+    environment: release
     env:
       CLOUDFLARE_SECRETS: /nonexistent
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
