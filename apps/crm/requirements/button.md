@@ -24,10 +24,10 @@ that sometimes shows.
   text. The same reason is a text that `aria-describedby` names, so a
   screen reader reads it, and the bare theme (REQ-CRM-BARE-001) shows it
   after the button. `ui/Key.tsx` holds the rule: a key with `off` (the
-  reason) is off. The buttons that can be off are `Undo`, `Redo` and
-  `Show hidden` (Activity box), `Prev` and `Next` (the pager of the list,
-  on the plate of the display unit, where the caption under each key is
-  its reason), `Everywhere else` and the `Revoke` of this session
+  reason) is off. The buttons that can be off are `Undo` and `Redo` (on
+  the plate of the organisation page), `Prev` and `Next` (the pager of the
+  list), each with the caption under it as its reason, `Show hidden` (the
+  Activity band) and `Clear` (the Next action module), `Everywhere else` and the `Revoke` of this session
   (`/account/sessions`), `Reset demo data` (`/account`), `Add a passkey`
   (`/account/passkeys` and the 403 page), `Delete` (`/account/passkeys`),
   `Sign in with a passkey`, `Sign in` (`/login/verify`), `Start recovery`

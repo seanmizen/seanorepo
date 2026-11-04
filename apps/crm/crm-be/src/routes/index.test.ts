@@ -773,7 +773,7 @@ describe('the page anatomy', () => {
         '<a ',
       );
     }
-    expect(lcds).toBeGreaterThanOrEqual(5);
+    expect(lcds).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -812,12 +812,21 @@ describe('every page with ?theme=bare', () => {
       expect(html).toContain('<nav class="links" aria-label="crm"><ul><li>');
 
       // Each action is a form with a string action and a submit button.
+      // A form with an id can have its button out of it, with a `form`
+      // attribute: a key on the plate, or the last row of a table.
       const forms = html.split('<form').slice(1);
       expect(forms.length).toBeGreaterThan(0);
       for (const form of forms) {
         const tag = form.slice(0, form.indexOf('>'));
         expect(tag).toMatch(/ action="\/[^"]*"/);
         expect(tag).toMatch(/ method="(get|post)"/);
+        const id = tag.match(/ id="([^"]+)"/)?.[1];
+        if (
+          id &&
+          new RegExp(`<button type="submit"[^>]* form="${id}"`).test(html)
+        ) {
+          continue;
+        }
         expect(form.slice(0, form.indexOf('</form>'))).toContain(
           '<button type="submit"',
         );
@@ -846,16 +855,16 @@ describe('every page with ?theme=bare', () => {
     expect(bare['/orgs/new']).toContain('<input required="" name="name"/>');
 
     // The organisation page: text and attributes carry each state, and each
-    // Save as button and each stage is one submit button. The Activity list
-    // is a <details>, so it opens with no script.
+    // Save as visit button and each stage is one submit button. The
+    // Activity band is a real table, open.
     const org = bare[`/orgs/${slug}`];
-    expect(org).toContain('<details class="events"><summary>');
+    expect(org).toContain('<th scope="rowgroup"');
     expect(org).toContain(
       '<button type="submit" class="key latch" aria-pressed="true" value="quoted" name="stage">',
     );
     expect(bodyText(org)).toContain('Quoted (current)');
     expect(org).toContain('value="2000-01-01"');
-    expect(bodyText(org)).toContain('Next action Chase quote Due 2000-Jan-01');
+    expect(bodyText(org)).toContain('Next action Chase quote 2000-Jan-01');
     expect(bodyText(org)).toContain('Wants a site');
     expect(bodyText(org)).toContain('Owner is Ann');
     expect(bodyText(org)).toContain('Ann Smith');

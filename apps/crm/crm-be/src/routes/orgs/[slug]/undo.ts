@@ -6,7 +6,7 @@ import { findOrg, formText, parseNumber } from '../../../org';
 import { activityBack, sendNotFound, sendOrgPage } from '../[slug]';
 
 /**
- * The post of the Undo or the Redo key of the Activity box
+ * The post of the Undo or the Redo key on the plate of the organisation page
  * (REQ-CRM-UNDO-002). `event` is the number of the event that the page
  * offered to reverse or apply. When the newest event is a different one
  * now, for example after a second tap, the post changes nothing.
@@ -44,10 +44,13 @@ export const undoRedoRoute =
           if (!taken) throw error;
           const label = kind === 'undo' ? 'Undo' : 'Redo';
           return sendOrgPage(db, request, reply, org, {
-            error:
-              taken === 'person.email'
-                ? `${label} did not change anything. Another person has the email address.`
-                : `${label} did not change anything. Another organisation has the URL slug.`,
+            problem: {
+              part: 'undo',
+              text:
+                taken === 'person.email'
+                  ? `${label} did not change anything. Another person has the email address.`
+                  : `${label} did not change anything. Another organisation has the URL slug.`,
+            },
           });
         }
         // An Undo or a Redo of a change to the details can change the slug.

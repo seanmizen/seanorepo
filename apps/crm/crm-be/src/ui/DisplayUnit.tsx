@@ -21,9 +21,10 @@ export interface Reading {
   /**
    * The size of the value. `name` is the one large value of the glass, with
    * the widest cell. `count` is a large number in a narrow cell. `text` is
-   * the default.
+   * the default. `wide` is a text with twice the width of a `text`, for
+   * example a next action and its due date.
    */
-  kind?: 'name' | 'count' | 'text';
+  kind?: 'name' | 'count' | 'text' | 'wide';
   /**
    * The lines under the value. A reading has the same number of lines in
    * each state, so the glass keeps its height when the data changes
@@ -51,6 +52,12 @@ export interface PlateKey {
   /** The `rel` of a link, for example `prev` or `next`. */
   rel?: string;
   /**
+   * The id of a form of the page that the key submits, for example the
+   * form of the control unit. The key is a submit button with a `form`
+   * attribute, so the form needs no second key.
+   */
+  formId?: string;
+  /**
    * The form of a key that submits: its action, its method and its hidden
    * fields.
    */
@@ -69,10 +76,11 @@ const PlateControl = ({
   off,
   href,
   rel,
+  formId,
   form,
 }: PlateKey) => {
   const captionId = `${id}-caption`;
-  if (off || (!href && !form)) {
+  if (off || (!href && !form && !formId)) {
     return (
       <Key type="button" id={id} off={caption} aria-describedby={captionId}>
         {label}
@@ -90,6 +98,13 @@ const PlateControl = ({
       >
         {label}
       </a>
+    );
+  }
+  if (formId) {
+    return (
+      <Key id={id} form={formId} aria-describedby={captionId}>
+        {label}
+      </Key>
     );
   }
   return (
@@ -114,6 +129,9 @@ const PlateControl = ({
  *   gives `null` when it has none, so the line is always present and the
  *   glass keeps its height (REQ-CRM-MORPH-001). A page that never shows one
  *   leaves it out.
+ * - `saved`: the last save, on the same line when there is no error, for
+ *   example "Saved 2026-Nov-04 11:21: Visit 4." It has no status mark: the
+ *   mark is for an alert or overdue only.
  * - `readings`: the read-out, as a `<dl>`. Each reading is a legend over a
  *   value, with faint rules between the readings. Each value and each line
  *   is one line high: a text that does not fit ends in an ellipsis.
@@ -127,10 +145,12 @@ const PlateControl = ({
  */
 export const DisplayUnit = ({
   alert,
+  saved,
   readings,
   keys = [],
 }: {
   alert?: string | null;
+  saved?: ReactNode;
   readings: Reading[];
   keys?: PlateKey[];
 }) => (
@@ -138,8 +158,13 @@ export const DisplayUnit = ({
     <div className="faceplate">
       <div className="glass">
         {alert !== undefined && (
-          <p role="alert" className={alert ? 'status' : 'status empty'}>
-            {alert}
+          <p
+            role="alert"
+            className={
+              alert ? 'status' : saved ? 'status saved' : 'status empty'
+            }
+          >
+            {(alert || saved) && <span>{alert || saved}</span>}
           </p>
         )}
         <dl className="strip">

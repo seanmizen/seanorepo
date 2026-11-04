@@ -27,8 +27,13 @@ export interface BandCell {
 
 /** One row of a band: one record. */
 export interface BandRow {
-  /** The link to the record. */
-  href: string;
+  /**
+   * The link to the record. With no link, the name is plain text, and
+   * the arrow column stays.
+   */
+  href?: string;
+  /** The React key of the row. The default is `href`, else `name`. */
+  key?: string;
   /** The name of the record: the row header. */
   name: string;
   /** The full text of the row header. The default is `name`. */
@@ -50,6 +55,62 @@ export interface BandGroup {
   count: number;
   rows: BandRow[];
 }
+
+/** The width of a band on the grid of 12 of `Bands`. */
+export type BandSpan = 4 | 8 | 12;
+
+/**
+ * The bands of a page that has more than one: a grid of 12 columns, with
+ * the `span` of each band. On a narrow screen each band has the full
+ * width, in the order of the HTML.
+ */
+export const Bands = ({ children }: { children: ReactNode }) => (
+  <div className="bands">{children}</div>
+);
+
+/**
+ * The frame of a band: a `<section>` with its `<h2>` (`title`), `info`
+ * and `tools`, then the data (`children`). `Band` puts a chart in it. A
+ * band of values that is not a list, for example the details of a record,
+ * puts a `<dl className="sheet">` in it.
+ *
+ * - `name` is a class of the section, so the theme can give the band its
+ *   own columns, for example `contacts`.
+ * - `tools` are links and forms at the right of the head, for example
+ *   Edit or Show hidden.
+ */
+export const BandSection = ({
+  id,
+  title,
+  info,
+  tools,
+  name,
+  span,
+  children,
+}: {
+  /** The id of the `<h2>`, which labels the section. */
+  id: string;
+  title: string;
+  info?: ReactNode;
+  tools?: ReactNode;
+  name?: string;
+  span?: BandSpan;
+  children: ReactNode;
+}) => (
+  <section
+    className={['band', name, span && `span-${span}`].filter(Boolean).join(' ')}
+    aria-labelledby={id}
+  >
+    <div className="band-head">
+      <h2 className="label" id={id}>
+        {title}
+      </h2>
+      {info && <p className="info">{info}</p>}
+      {tools && <div className="tools">{tools}</div>}
+    </div>
+    {children}
+  </section>
+);
 
 /**
  * The band: the data of a page, under the rack, at the full width of the
@@ -76,11 +137,19 @@ export interface BandGroup {
  *    `seam`. With no page styles, the seam cell says `Yes` or `No` under
  *    its legend.
  * 4. With no rows, the band shows `empty` in one row.
+ * 5. `foot` is one more row after the groups, in a `<tfoot>`: for example
+ *    the fields to add a record, each under its column.
+ *
+ * With no `gutter`, the band has no gutter column, and its groups have no
+ * name: give one group.
  */
 export const Band = ({
   id,
   title,
   info,
+  tools,
+  name,
+  span: width,
   gutter,
   seam,
   nameLabel,
@@ -88,13 +157,18 @@ export const Band = ({
   columns,
   groups,
   empty,
+  foot,
 }: {
   /** The id of the `<h2>`, which labels the section. */
   id: string;
   title: string;
   info?: ReactNode;
-  /** The legend of the gutter, for example `Due`. */
-  gutter: string;
+  tools?: ReactNode;
+  /** A class of the section (see `BandSection`). */
+  name?: string;
+  span?: BandSpan;
+  /** The legend of the gutter, for example `Due`. No gutter when absent. */
+  gutter?: string;
   /** The legend of the LED column, for example `Due now`. No seam when absent. */
   seam?: string;
   /** The legend of the name column. */
@@ -102,21 +176,23 @@ export const Band = ({
   orderName?: 'asc' | 'desc';
   columns: BandColumn[];
   groups: BandGroup[];
-  empty: string;
+  empty: ReactNode;
+  foot?: ReactNode;
 }) => {
-  const span = 2 + (seam ? 1 : 0) + columns.length;
+  const span = 1 + (gutter ? 1 : 0) + (seam ? 1 : 0) + columns.length;
   const rows = groups.filter((group) => group.rows.length > 0);
   return (
-    <section className="band" aria-labelledby={id}>
-      <div className="band-head">
-        <h2 className="label" id={id}>
-          {title}
-        </h2>
-        {info && <p className="info">{info}</p>}
-      </div>
+    <BandSection
+      id={id}
+      title={title}
+      info={info}
+      tools={tools}
+      name={name}
+      span={width}
+    >
       <table className="chart">
         <colgroup>
-          <col className="c-gutter" />
+          {gutter && <col className="c-gutter" />}
           {seam && <col className="c-seam" />}
           <col className="c-name" />
           {columns.map((column) => (
@@ -125,9 +201,11 @@ export const Band = ({
         </colgroup>
         <thead>
           <tr>
-            <th scope="col" className="c-gutter">
-              {gutter}
-            </th>
+            {gutter && (
+              <th scope="col" className="c-gutter">
+                {gutter}
+              </th>
+            )}
             {seam && (
               <th scope="col" className="c-seam">
                 <BareText>{seam}</BareText>
@@ -163,8 +241,8 @@ export const Band = ({
           rows.map((group) => (
             <tbody key={group.name}>
               {group.rows.map((row, i) => (
-                <tr key={row.href}>
-                  {i === 0 && (
+                <tr key={row.key ?? row.href ?? row.name}>
+                  {gutter && i === 0 && (
                     <th
                       scope="rowgroup"
                       rowSpan={group.rows.length}
@@ -185,10 +263,17 @@ export const Band = ({
                     className="c-name"
                     title={row.title ?? row.name}
                   >
-                    <a href={row.href}>
-                      <span className="arrow" aria-hidden="true" />
-                      {row.name}
-                    </a>
+                    {row.href ? (
+                      <a href={row.href}>
+                        <span className="arrow" aria-hidden="true" />
+                        {row.name}
+                      </a>
+                    ) : (
+                      <>
+                        <span className="arrow" aria-hidden="true" />
+                        {row.name}
+                      </>
+                    )}
                   </th>
                   {row.cells.map((cell, n) => (
                     <td
@@ -204,7 +289,8 @@ export const Band = ({
             </tbody>
           ))
         )}
+        {foot && <tfoot>{foot}</tfoot>}
       </table>
-    </section>
+    </BandSection>
   );
 };

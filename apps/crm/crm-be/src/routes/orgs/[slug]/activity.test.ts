@@ -79,7 +79,7 @@ describe('POST /orgs/<slug>/activity (the Log module)', () => {
     const response = await log({ outcome: 'note', note: '  ' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Type a visit note, then tap Note only.</p>',
+      '<p role="alert" class="status"><span>Type a visit note, then tap Note only.</span></p>',
     );
     expect(notes()).toEqual([]);
   });
@@ -126,7 +126,7 @@ describe('POST /orgs/<slug>/activity (the Log module)', () => {
     const response = await log({ outcome: 'maybe' });
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Tap one of the Save as buttons.</p>',
+      '<p role="alert" class="status"><span>Tap Note only or one of the Save as visit buttons.</span></p>',
     );
     expect(visits()).toEqual([]);
   });

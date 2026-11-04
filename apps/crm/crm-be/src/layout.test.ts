@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { buildApp } from './index';
-import { addOrg, divOf, postForm, signInAdmin, testApp } from './test-helpers';
+import { addOrg, divOf, signInAdmin, testApp } from './test-helpers';
 
 /** The source of the theme. */
 const THEME = readFileSync(
@@ -111,23 +111,50 @@ describe('the layout (REQ-CRM-LAYOUT-002)', () => {
     }
   });
 
+  test('the organisation page and its edit pages are the rack: the display unit of the record, then the control unit, then the bands (REQ-CRM-LAYOUT-002)', async () => {
+    const slug = await addOrg(app, cookie, {
+      name: 'Acme Plumbing',
+      contact_name: 'Ann Smith',
+    });
+    for (const url of [
+      `/orgs/${slug}`,
+      `/orgs/${slug}/edit`,
+      `/orgs/${slug}/contacts/1`,
+    ]) {
+      const html = await get(url);
+      expect(html).not.toContain('class="device');
+      expect(html).not.toContain('class="body"');
+      const main = html.slice(
+        html.indexOf('<main>') + '<main>'.length,
+        html.indexOf('</main>'),
+      );
+      const rack = divOf(main, 'rack');
+      const display = divOf(rack, 'unit display');
+      const controls = divOf(rack, 'unit controls');
+      expect(rack).toBe(`<div class="rack">${display}${controls}</div>`);
+      // The edit pages have an intro before the rack.
+      expect(main.replace(/^<p class="intro">[^<]*<\/p>/, '')).toStartWith(
+        rack,
+      );
+    }
+    // The organisation page: Contacts (8 of 12) and Details (4), then
+    // Activity, under the rack.
+    const html = await get(`/orgs/${slug}`);
+    const bands = divOf(html, 'bands');
+    expect(
+      [
+        ...bands.matchAll(/<section class="band ([\w -]+)" aria-labelledby/g),
+      ].map((match) => match[1]),
+    ).toEqual(['contacts span-8', 'details span-4', 'activity']);
+    expect(THEME).toMatch(/\.bands \{[^}]*grid-template-columns: repeat\(12/);
+  });
+
   test('a page with a device keeps the 40/60 grid: the left column holds only the device, and each section of data is a Box (REQ-CRM-LAYOUT-002)', async () => {
     // The wide grid is 40% and 60%, in fractions.
     expect(THEME).toContain(
       'grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);',
     );
-    const slug = await addOrg(app, cookie, {
-      name: 'Acme Plumbing',
-      contact_name: 'Ann Smith',
-    });
-    await postForm(
-      app,
-      `/orgs/${slug}/activity`,
-      { outcome: 'spoke', note: 'Wants a site' },
-      cookie,
-    );
     const pages: Record<string, string[]> = {
-      [`/orgs/${slug}`]: ['Activity', 'Contacts', 'Details'],
       '/account/passkeys': ['Passkeys'],
       '/account/sessions': ['Sessions'],
     };

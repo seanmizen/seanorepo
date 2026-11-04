@@ -20,7 +20,16 @@ export const orgStageRoute = (app: FastifyInstance, db: Database) => {
       if (!org) return sendNotFound(request, reply);
       const parsed = parsePipeline(request.body);
       if ('error' in parsed) {
-        return sendOrgPage(db, request, reply, org, { error: parsed.error });
+        return sendOrgPage(db, request, reply, org, {
+          problem:
+            parsed.error === 'Choose a stage.'
+              ? { text: parsed.error, part: 'stage' }
+              : {
+                  text: parsed.error,
+                  part: 'next',
+                  field: { field: 'next_action_on', word: 'not valid' },
+                },
+        });
       }
       db.transaction(() =>
         setPipeline(db, (request.auth as Auth).personId, org, parsed.pipeline),

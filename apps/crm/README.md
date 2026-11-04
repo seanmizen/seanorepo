@@ -30,25 +30,38 @@ billing. After sign-in, the seller has these pages:
   (see [Page rules](#page-rules)).
 - `/orgs/new`: the new lead. The organisation form and the contact form,
   and one `Save` key. An empty URL slug comes from the name.
-- `/orgs/<slug>`: one organisation. The LCD shows the name, the stage, the
-  next action and its due date, and the last visit. The modules:
-  - **Log**: the `Visit note` field, then the Save as keys. `No answer`,
-    `Spoke`, `Call back`, `Not interested` and `Do not knock` save a visit
-    with the note. `Note only` saves the text as a note. `Do not knock`
-    also sets the stage to Lost.
-  - **Stage**: one latching key for each stage. Each key saves.
-  - **Next action**: the action, its due date and `Save`.
-  - **Add a contact**: the contact form and `Save`.
-
-  The boxes: **Activity** (`Undo` and `Redo`, then every event, newest
-  first, in a `<details>` that is closed until a tap), **Contacts** (each
-  with `Edit` and `Remove`) and **Details** (with `Edit`). Each visit and
-  note in Activity shows its number, for example `Visit 17: Spoke.`. See
-  [Undo and history](#undo-and-history).
-- `/orgs/<slug>/edit`, `/orgs/<slug>/contacts/<number>` and
-  `/orgs/<slug>/activity/<number>`: the edit pages. Each one is the same
-  form as its create page, filled in (REQ-CRM-FORM-001). The LCD of an
-  activity entry shows its `Type`: `Note`, or `Visit, <outcome>`.
+- `/orgs/<slug>`: one organisation, as a rack over the bands
+  (`apps/crm/docs/002-rack.md`):
+  - The glass reads the name (the one large value) and the address, the
+    next action and its due date, the stage, the last visit and the first
+    contact. Its first line is the error of the last post, or else the
+    last save. The plate keys are `Undo` and `Redo`. Each caption names
+    the change that the key acts on (`Undo: Visit 3`), or why it is off.
+  - The control unit holds three modules in one row. **Log**: the
+    `Visit note` field, then the `Save as visit` keys. `No answer`,
+    `Spoke`, `Call back` (`then due`), `Not interested` and `Do not knock`
+    (`sets Lost`) save a visit with the note. `Note only` (`no visit`)
+    saves the text as a note. **Stage**: one latching key for each stage,
+    with the number of organisations at that stage. Each key saves.
+    **Next action**: the action, the due date and `Save`, then the due
+    keys `Tomorrow`, `+3 days` and `+1 week`, each with the date that it
+    sets, then `Clear`.
+  - The bands, all open: **Contacts** (each with `Edit` and `Remove`; the
+    last row adds a contact, each field under its column), **Details**
+    (with `Edit`) and **Activity** (every event, newest first, grouped by
+    month, with `Show hidden`). Each visit and note shows its number, for
+    example `Visit 17 · Spoke`. See [Undo and history](#undo-and-history).
+  - A problem shows in three places: the line of the glass, the part with
+    the problem (a thick outline and a word such as `needed`), and the key
+    that fixes it. An overdue next action is one too: the mark in the
+    glass, `Overdue` on the Next action module, and the due keys.
+- `/orgs/<slug>/edit` and `/orgs/<slug>/contacts/<number>`: the edit pages
+  of an organisation and of a contact. Each one is the same rack: the
+  glass reads the record, the control unit holds the same form as its
+  create page, filled in (REQ-CRM-FORM-001), and the plate keys are `Save`
+  and `Cancel`. `/orgs/<slug>/activity/<number>`: the edit page of a visit
+  or a note, with the Log module filled in. Its LCD shows its `Type`:
+  `Note`, or `Visit, <outcome>`.
 
 ### Short IDs
 
@@ -174,8 +187,9 @@ The design is in "Undo and history" in
   (`POST /orgs/<slug>/activity/<number>/restore` or
   `POST /orgs/<slug>/contacts/<number>/restore`). A second Restore does
   nothing (REQ-CRM-UNDO-003).
-- **Keys that cannot act.** `Undo`, `Redo` and `Show hidden` are always in
-  their place. A key that cannot act is off (`disabled`), with the reason
+- **Keys that cannot act.** `Undo` and `Redo` (on the plate) and
+  `Show hidden` (in the head of the Activity band) are always in their
+  place. A key that cannot act is off (`disabled`), with the reason
   in its hover text and in its accessible description (REQ-CRM-BUTTON-001,
   the `off` prop of `ui/Key.tsx`). The rule is the same for each button
   of the crm: see [Page rules](#page-rules).

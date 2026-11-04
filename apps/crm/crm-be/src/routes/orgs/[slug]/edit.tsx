@@ -1,8 +1,15 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { type ActivityData, readActivity } from '../../../activity';
 import type { Auth } from '../../../auth';
+import { type Contact, listContacts } from '../../../contacts';
 import { writeEvent } from '../../../events';
-import { changedFields, type FormValues, parseForm } from '../../../forms/form';
+import {
+  changedFields,
+  type FieldProblem,
+  type FormValues,
+  parseForm,
+} from '../../../forms/form';
 import {
   ORG_COLUMNS,
   organisationForm,
@@ -10,59 +17,85 @@ import {
 } from '../../../forms/organisation';
 import { findOrg, type Org, orgPath, resolveSlug } from '../../../org';
 import { type PageParts, renderPage } from '../../../render';
-import { Device } from '../../../ui/Device';
-import { Key } from '../../../ui/Key';
-import { Lcd } from '../../../ui/Lcd';
-import { Module } from '../../../ui/Module';
+import { ControlUnit } from '../../../ui/ControlUnit';
+import { DisplayUnit } from '../../../ui/DisplayUnit';
+import { Rack } from '../../../ui/Rack';
 import { RecordForm } from '../../../ui/RecordForm';
-import { sendNotFound } from '../[slug]';
+import { orgReadings, sendNotFound } from '../[slug]';
+
+/** The id of the form of the edit page. The Save key on the plate submits it. */
+const FORM_ID = 'org-edit';
 
 /**
- * The edit page of an organisation: the organisation form of `/orgs/new`,
- * filled in, and one `Save` key. The URL slug stays the same unless the
- * person changes it, and the intro says that old links stop working then.
+ * The edit page of an organisation: the same rack as the organisation page
+ * (its read-out in the glass, `orgReadings`), with the organisation form of
+ * `/orgs/new` in the control unit, filled in (REQ-CRM-FORM-001). The plate
+ * keys are Save (it submits the form) and Cancel (back to the
+ * organisation). An error is the first line of the glass, and the field
+ * with the problem has a thick outline and a word. The URL slug stays the
+ * same unless the person changes it, and the intro says that old links
+ * stop working then.
  */
 export const orgEditPage = ({
   org,
+  contacts,
+  activity,
   values,
   error,
+  problem,
 }: {
   org: Org;
+  contacts: Contact[];
+  activity: ActivityData;
   values?: FormValues;
   error?: string;
+  problem?: FieldProblem;
 }): PageParts => ({
   title: `Edit ${org.name}`,
   intro:
     'When the URL slug changes, old links to this organisation stop working.',
-  device: (
-    <Device>
-      <Lcd alert={error} />
-      <form method="post" action={orgPath(org.slug, 'edit')}>
-        <RecordForm
-          form={organisationForm}
-          values={
-            values ?? {
-              name: org.name,
-              source: org.source ?? '',
-              slug: org.slug,
-              address_line_1: org.address_line_1 ?? '',
-              address_line_2: org.address_line_2 ?? '',
-              postcode: org.postcode ?? '',
+  rack: (
+    <Rack>
+      <DisplayUnit
+        alert={error ?? null}
+        readings={orgReadings({ org, contacts, activity })}
+        keys={[
+          { id: 'save', label: 'Save', caption: 'Details', formId: FORM_ID },
+          {
+            id: 'cancel',
+            label: 'Cancel',
+            caption: 'Back to the org',
+            href: orgPath(org.slug),
+          },
+        ]}
+      />
+      <ControlUnit>
+        <form id={FORM_ID} method="post" action={orgPath(org.slug, 'edit')}>
+          <RecordForm
+            form={organisationForm}
+            problem={problem}
+            values={
+              values ?? {
+                name: org.name,
+                source: org.source ?? '',
+                slug: org.slug,
+                address_line_1: org.address_line_1 ?? '',
+                address_line_2: org.address_line_2 ?? '',
+                postcode: org.postcode ?? '',
+              }
             }
-          }
-        />
-        <Module>
-          <Key>Save</Key>
-        </Module>
-      </form>
-    </Device>
+          />
+        </form>
+      </ControlUnit>
+    </Rack>
   ),
 });
 
 /**
  * Check the post of the organisation form, then save it over `org`, as one
  * `details` event with the names of the changed fields and their values
- * before and after. With no change, nothing is written. Returns the slug and the changed fields, or the error and the
+ * before and after. With no change, nothing is written. Returns the slug
+ * and the changed fields, or the error, the field that it marks and the
  * values to show again. The route `POST /<slug>/edit` and the MCP tool
  * `update_organisation` call it.
  */
@@ -73,11 +106,17 @@ export const updateOrg = (
   post: unknown,
 ):
   | { slug: string; fields: string[] }
-  | { error: string; values: FormValues } => {
-  const { values, error } = parseForm(organisationForm, post);
-  if (error) return { error, values };
+  | { error: string; problem?: FieldProblem; values: FormValues } => {
+  const { values, error, problem } = parseForm(organisationForm, post);
+  if (error) return { error, problem, values };
   const slug = resolveSlug(db, values, org.id);
-  if ('error' in slug) return { error: slug.error, values };
+  if ('error' in slug) {
+    return {
+      error: slug.error,
+      problem: { field: 'slug', word: 'in use' },
+      values,
+    };
+  }
   const next = { ...values, slug: slug.slug };
   const fields = changedFields(organisationForm, { ...org }, next);
   if (fields.length > 0) {
@@ -113,12 +152,21 @@ export const orgEditRoute = (app: FastifyInstance, db: Database) => {
   const send = (
     request: FastifyRequest,
     reply: FastifyReply,
-    props: Parameters<typeof orgEditPage>[0],
+    props: Omit<Parameters<typeof orgEditPage>[0], 'contacts' | 'activity'>,
   ) =>
     reply
       .code(props.error ? 400 : 200)
       .type('text/html; charset=utf-8')
-      .send(renderPage(request, orgEditPage(props)));
+      .send(
+        renderPage(
+          request,
+          orgEditPage({
+            ...props,
+            contacts: listContacts(db, props.org.id),
+            activity: readActivity(db, props.org.id),
+          }),
+        ),
+      );
 
   app.get<{ Params: { slug: string } }>(
     '/orgs/:slug/edit',

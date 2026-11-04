@@ -103,6 +103,14 @@ interface Press {
   fallback: () => void;
 }
 
+/** True when `node` is in `form`, or a control that names it (`form=`). */
+const inForm = (form: HTMLFormElement | undefined, node: Node) =>
+  Boolean(
+    form &&
+      (form.contains(node) ||
+        ('form' in node && (node as HTMLInputElement).form === form)),
+  );
+
 const go = async ({ url, init, form, pop, fallback }: Press) => {
   current?.abort();
   const controller = new AbortController();
@@ -158,9 +166,10 @@ const go = async ({ url, init, form, pop, fallback }: Press) => {
     ignoreActiveValue: !post,
     callbacks: {
       // On the same page, a text field that the person changed, outside the
-      // form that sent the press, keeps its text.
+      // form that sent the press, keeps its text. A field with a `form`
+      // attribute (the Add contact row of a table) is in its form too.
       beforeNodeMorphed: (old) =>
-        !(samePage && changed(old) && !form?.contains(old)),
+        !(samePage && changed(old) && !inForm(form, old)),
       // On the same page, a `<details>` that the person opened stays open.
       beforeAttributeUpdated: (name, element, action) =>
         !(

@@ -1,5 +1,6 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { BareText } from './BareText';
+import { keyClass, Sub } from './Key';
 
 /**
  * A key that latches: a submit `<button>` with an LED on top, lit when
@@ -12,21 +13,28 @@ import { BareText } from './BareText';
  * on, ", A to Z" comes after the label in place of "(current)". A screen
  * reader reads that text too, because `aria-pressed` does not tell the
  * direction.
+ *
+ * `sub` and `fix` are as on `Key`: the sub-label under the label, and the
+ * mark of the key that fixes a problem.
  */
 export const LatchKey = ({
   on,
   direction,
   state,
+  sub,
+  fix,
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   on: boolean;
   direction?: 'asc' | 'desc';
   state?: string;
+  sub?: ReactNode;
+  fix?: boolean;
 }) => (
   <button
     type="submit"
-    className="key latch"
+    className={keyClass(fix, 'latch')}
     aria-pressed={on}
     data-direction={on ? direction : undefined}
     {...props}
@@ -38,5 +46,6 @@ export const LatchKey = ({
         {' (current)'}
       </span>
     )}
+    {sub !== undefined && <Sub>{sub}</Sub>}
   </button>
 );

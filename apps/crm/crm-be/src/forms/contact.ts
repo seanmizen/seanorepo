@@ -40,4 +40,5 @@ export const contactForm: RecordFormDef = {
     values.name || values.phone || values.email
       ? undefined
       : 'Type a name, a phone number or an email address.',
+  checkField: 'name',
 };

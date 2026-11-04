@@ -40,6 +40,11 @@ export interface FormField {
   /** `keys`: the values in rows. The keys of a row share it in whole parts. */
   rows?: string[][];
   /**
+   * `keys`: the sub-label of a key, by value: what else the key does, for
+   * example `then due` or `sets Lost` (`ui/Key.tsx`, `Sub`).
+   */
+  hints?: Record<string, string>;
+  /**
    * `keys`: the text of one more key on an edit page, for example `Save`.
    * It sends the current value, so it saves the other fields and keeps
    * the value of this field.
@@ -57,6 +62,18 @@ export interface RecordFormDef {
   modules: { label: string; fields: FormField[] }[];
   /** The error for the values together, after each field is valid. */
   check?: (values: FormValues) => string | undefined;
+  /** The field that the error of `check` marks on the page. */
+  checkField?: string;
+}
+
+/**
+ * The field with the problem of a post, and the word that its label says
+ * after a dot: `needed` for an empty value, `not valid` for a value that is
+ * not valid (`apps/crm/docs/002-rack.md`, detail 6).
+ */
+export interface FieldProblem {
+  field: string;
+  word: string;
 }
 
 /** The values of a form: trimmed text, `''` when empty. */
@@ -69,16 +86,18 @@ export const fieldsOf = (form: RecordFormDef) =>
 /**
  * Read the values of `form` from a post `body`, and check them. `prefix`
  * comes before each field name in the post, as in `RecordForm`. Returns
- * the values and the first error, if there is one.
+ * the values and the first error, if there is one, with the field that it
+ * marks (`problem`).
  */
 export const parseForm = (
   form: RecordFormDef,
   body: unknown,
   prefix = '',
-): { values: FormValues; error?: string } => {
+): { values: FormValues; error?: string; problem?: FieldProblem } => {
   const post = (body ?? {}) as Record<string, unknown>;
   const values: FormValues = {};
   let error: string | undefined;
+  let problem: FieldProblem | undefined;
   for (const field of fieldsOf(form)) {
     let value = formText(post[prefix + field.name]);
     if (value && field.normalize) value = field.normalize(value);
@@ -94,8 +113,20 @@ export const parseForm = (
     } else {
       error = field.check?.(value);
     }
+    if (error) {
+      problem = { field: field.name, word: value ? 'not valid' : 'needed' };
+    }
   }
-  return { values, error: error ?? form.check?.(values) };
+  if (!error) {
+    error = form.check?.(values);
+    if (error && form.checkField) {
+      problem = {
+        field: form.checkField,
+        word: values[form.checkField] ? 'not valid' : 'needed',
+      };
+    }
+  }
+  return { values, error, problem };
 };
 
 /**

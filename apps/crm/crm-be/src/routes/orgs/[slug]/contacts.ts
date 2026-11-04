@@ -8,8 +8,9 @@ import { findOrg, orgPath } from '../../../org';
 import { sendNotFound, sendOrgPage } from '../[slug]';
 
 /**
- * `POST /<slug>/contacts`: the Add a contact module. On an error, the
- * page shows the message in the LCD, and the module keeps the values.
+ * `POST /<slug>/contacts`: the Add contact row of the Contacts band. On an
+ * error, the page shows the message in the glass, marks the field with the
+ * problem, and the row keeps the values.
  *
  * `GET /<slug>/contacts` opens the organisation page, which lists the
  * contacts. The path title links it.
@@ -31,7 +32,7 @@ export const orgContactsRoute = (app: FastifyInstance, db: Database) => {
     async (request, reply) => {
       const org = findOrg(db, request.params.slug);
       if (!org) return sendNotFound(request, reply);
-      const { values, error } = parseForm(contactForm, request.body);
+      const { values, error, problem } = parseForm(contactForm, request.body);
       const failed =
         error ??
         db.transaction(() =>
@@ -39,7 +40,12 @@ export const orgContactsRoute = (app: FastifyInstance, db: Database) => {
         )();
       if (failed) {
         return sendOrgPage(db, request, reply, org, {
-          error: failed,
+          problem: {
+            text: failed,
+            part: 'contact',
+            // An error of addContact is about the email address.
+            field: problem ?? { field: 'email', word: 'in use' },
+          },
           contact: values,
         });
       }
