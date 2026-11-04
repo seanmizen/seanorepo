@@ -1364,6 +1364,14 @@ button.link:disabled {
   .chart :is(.c-stage, .c-last, .arrow) {
     display: none;
   }
+  /* The row of an empty band has the full width, at its own height: it can
+     hold the New lead link of a search with no match. */
+  .chart tr:has(> td.empty) {
+    display: block;
+    height: auto;
+    padding: 0;
+    background: none;
+  }
   .chart td.empty {
     padding: 0.9em;
     background: var(--surface);
@@ -1454,6 +1462,31 @@ button.link:disabled {
   #contact-edit > .module > .field {
     grid-column: auto;
   }
+}
+/* A choice key (the First visit module of /orgs/new): a radio button in a
+   latching key. The radio button is out of view, and the LED of the
+   checked key is on. With no page styles it is a plain radio button. */
+label.key.latch > input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+label.key.latch:has(> input:checked) {
+  background: var(--surface);
+  box-shadow:
+    inset 0 2px 0 var(--line),
+    0 0 0 1px var(--line);
+  font-weight: 700;
+}
+label.key.latch:has(> input:checked)::before {
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+label.key.latch:has(> input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 /* A link to a module outlines it. */
 .module:target {

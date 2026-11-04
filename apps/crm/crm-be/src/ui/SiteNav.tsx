@@ -1,12 +1,11 @@
 import { Fragment } from 'react';
 
 /**
- * The app links of the nav, in order. "sign out" comes after them. `also`
- * is a different path of the same page: `/` shows the same list as
- * `/orgs`.
+ * The app links of the nav, in order. "sign out" comes after them. `orgs`
+ * is the address book. It is not the home (`/`, the Plan).
  */
 const LINKS = [
-  { href: '/orgs', text: 'orgs', also: '/' },
+  { href: '/orgs', text: 'orgs' },
   { href: '/orgs/new', text: 'new lead' },
   { href: '/account', text: 'account' },
 ];
@@ -72,9 +71,9 @@ export const SiteNav = ({
       {signedIn && (
         <nav className="links" aria-label="crm">
           <ul>
-            {LINKS.map(({ href, text, also }) => (
+            {LINKS.map(({ href, text }) => (
               <li key={href}>
-                {href === path || also === path ? (
+                {href === path ? (
                   <span aria-current="page">{text}</span>
                 ) : (
                   <a href={href}>{text}</a>

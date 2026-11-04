@@ -1,62 +1,146 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
+import { logActivity } from '../../activity';
 import type { Auth } from '../../auth';
 import { insertContact } from '../../contacts';
 import { writeEvent } from '../../events';
+import { activityForm, LOG_KEYS } from '../../forms/activity';
 import { contactForm } from '../../forms/contact';
-import { type FormValues, isBlank, parseForm } from '../../forms/form';
+import {
+  type FieldProblem,
+  type FormValues,
+  isBlank,
+  parseForm,
+} from '../../forms/form';
 import {
   ORG_COLUMNS,
   organisationForm,
   orgColumnValues,
 } from '../../forms/organisation';
-import { orgPath, resolveSlug } from '../../org';
+import { findOrg, formText, orgPath, resolveSlug } from '../../org';
 import { type PageParts, renderPage } from '../../render';
-import { Device } from '../../ui/Device';
-import { Key } from '../../ui/Key';
-import { Lcd } from '../../ui/Lcd';
-import { Module } from '../../ui/Module';
+import { ControlUnit } from '../../ui/ControlUnit';
+import { DisplayUnit } from '../../ui/DisplayUnit';
+import { Rack } from '../../ui/Rack';
 import { RecordForm } from '../../ui/RecordForm';
 
 /** The prefix of the contact fields in the post of the new-lead form. */
 const CONTACT = 'contact_';
 
+/** The prefix of the visit fields in the post of the new-lead form. */
+const VISIT = 'visit_';
+
+/** The id of the new-lead form. Save lead on the plate submits it. */
+const FORM_ID = 'new-lead';
+
+/** The form of a new lead with the problem of the last post. */
+export type LeadForm = 'org' | 'contact' | 'visit';
+
 /**
- * The new-lead page. The device is one form: the organisation form (the
- * Organisation and Address modules), then the contact form (the First
- * contact module), then the `Save` key. Each form is the same as on its
- * edit page (REQ-CRM-FORM-001). On an error, the LCD shows the message,
- * and the form keeps the values that the person typed.
+ * The new-lead page (`apps/crm/docs/002-rack.md`): a rack, with no band.
+ *
+ * - The display unit. The glass reads what the save sets: the name (the
+ *   one large value) and the address, the stage Lead, the source, the
+ *   lawful basis, the first contact and the first visit. The first line
+ *   is the error of the last post. The plate keys are Save lead (it
+ *   submits the form) and Cancel (back to the address book).
+ * - The control unit. One form with four modules side by side:
+ *   Organisation and Address (the organisation form), First contact (the
+ *   contact form) and First visit (the Log form, with each Save as visit
+ *   key a choice and `None` on by default). Each form is the same as on
+ *   its edit page (REQ-CRM-FORM-001).
+ *
+ * Save lead adds the organisation, its contact and its first visit in one
+ * press. On an error, the form keeps the values that the person typed,
+ * and the field with the problem has a thick outline and a word.
+ * `org.name` can come from the search of the list (`?name=`).
  */
 export const newOrgPage = ({
-  org,
-  contact,
+  org = {},
+  contact = {},
+  visit = {},
   error,
+  problem,
 }: {
   org?: FormValues;
   contact?: FormValues;
+  visit?: FormValues;
   error?: string;
-} = {}): PageParts => ({
-  title: 'New lead',
-  intro: 'Add an organisation and its first contact, at the stage Lead.',
-  device: (
-    <Device>
-      <Lcd alert={error} />
-      <form method="post" action="/orgs/new">
-        <RecordForm form={organisationForm} values={org} />
-        <RecordForm
-          form={contactForm}
-          values={contact}
-          prefix={CONTACT}
-          label="First contact"
+  problem?: { form: LeadForm; field?: FieldProblem };
+} = {}): PageParts => {
+  const marked = (form: LeadForm) =>
+    problem?.form === form ? problem.field : undefined;
+  const address = [org.address_line_1, org.address_line_2, org.postcode]
+    .filter(Boolean)
+    .join(', ');
+  return {
+    title: 'New lead',
+    rack: (
+      <Rack>
+        <DisplayUnit
+          alert={error ?? null}
+          readings={[
+            {
+              label: 'New lead',
+              kind: 'name',
+              value: org.name || 'No name',
+              lines: [{ value: address || 'No address' }],
+            },
+            { label: 'Stage', value: 'Lead' },
+            { label: 'Source', value: org.source || 'None' },
+            { label: 'Lawful basis', value: 'legitimate interests' },
+            { label: 'First contact', value: contact.name || 'None' },
+            {
+              label: 'First visit',
+              value: LOG_KEYS[visit.outcome ?? ''] ?? 'None',
+            },
+          ]}
+          keys={[
+            {
+              id: 'save-lead',
+              label: 'Save lead',
+              caption: 'Stage Lead',
+              formId: FORM_ID,
+            },
+            {
+              id: 'cancel',
+              label: 'Cancel',
+              caption: 'Back to orgs',
+              href: '/orgs',
+            },
+          ]}
         />
-        <Module>
-          <Key>Save</Key>
-        </Module>
-      </form>
-    </Device>
-  ),
-});
+        <ControlUnit>
+          <form id={FORM_ID} method="post" action="/orgs/new">
+            <RecordForm
+              form={organisationForm}
+              values={org}
+              span={3}
+              problem={marked('org')}
+            />
+            <RecordForm
+              form={contactForm}
+              values={contact}
+              prefix={CONTACT}
+              label="First contact"
+              span={3}
+              problem={marked('contact')}
+            />
+            <RecordForm
+              form={activityForm}
+              values={visit}
+              prefix={VISIT}
+              label="First visit"
+              span={3}
+              problem={marked('visit')}
+              choose
+            />
+          </form>
+        </ControlUnit>
+      </Rack>
+    ),
+  };
+};
 
 /**
  * Add the organisation at the stage Lead, and its contact if the person
@@ -96,7 +180,11 @@ export const addOrg = (
  * Check a new lead, then add it (`addOrg`). `org` is the post of the
  * organisation form, and `contact` the post of the contact form, with its
  * field names after `prefix`. With no name, phone or email, the lead has no
- * contact yet. Returns the slug, or the error and the values to show again.
+ * contact yet. `visit` is the post of the First visit module, with its
+ * field names after `visit.prefix`: with a Save as visit value or a note,
+ * the first visit (or note) is logged in the same transaction, after the
+ * `create` event, so Undo can reverse it. Returns the slug, or the error,
+ * the form and the field with the problem, and the values to show again.
  * The route `POST /orgs/new` and the MCP tool `create_lead` call it.
  */
 export const createLead = (
@@ -105,36 +193,82 @@ export const createLead = (
   org: unknown,
   contact: unknown,
   prefix = '',
+  visit?: { post: unknown; prefix: string },
 ):
   | { slug: string }
-  | { error: string; org: FormValues; contact: FormValues } => {
+  | {
+      error: string;
+      problem: { form: LeadForm; field?: FieldProblem };
+      org: FormValues;
+      contact: FormValues;
+      visit: FormValues;
+    } => {
   const orgForm = parseForm(organisationForm, org);
   const contactPost = parseForm(contactForm, contact, prefix);
+  const visitPost = visit
+    ? parseForm(activityForm, visit.post, visit.prefix)
+    : undefined;
   const hasContact = !isBlank(contactForm, contactPost.values);
-  const error = orgForm.error ?? (hasContact ? contactPost.error : undefined);
-  const slug = error ? { error } : resolveSlug(db, orgForm.values);
+  const hasVisit =
+    visitPost !== undefined && !isBlank(activityForm, visitPost.values);
+  const values = {
+    org: orgForm.values,
+    contact: contactPost.values,
+    visit: visitPost?.values ?? {},
+  };
+  const failed: [LeadForm, ReturnType<typeof parseForm>] | undefined =
+    orgForm.error
+      ? ['org', orgForm]
+      : hasContact && contactPost.error
+        ? ['contact', contactPost]
+        : hasVisit && visitPost?.error
+          ? ['visit', visitPost]
+          : undefined;
+  if (failed) {
+    const [form, { error, problem }] = failed;
+    return {
+      error: String(error),
+      problem: { form, field: problem },
+      ...values,
+    };
+  }
+  const slug = resolveSlug(db, orgForm.values);
   if ('error' in slug) {
     return {
       error: slug.error,
-      org: orgForm.values,
-      contact: contactPost.values,
+      problem: { form: 'org', field: { field: 'slug', word: 'in use' } },
+      ...values,
     };
   }
-  addOrg(
-    db,
-    actor,
-    { ...orgForm.values, slug: slug.slug },
-    hasContact ? contactPost.values : null,
-  );
+  db.transaction(() => {
+    addOrg(
+      db,
+      actor,
+      { ...orgForm.values, slug: slug.slug },
+      hasContact ? contactPost.values : null,
+    );
+    const added = findOrg(db, slug.slug);
+    if (hasVisit && visitPost && added) {
+      logActivity(db, actor, added, visitPost.values);
+    }
+  })();
   return slug;
 };
 
-/** `GET /orgs/new` and `POST /orgs/new` */
+/**
+ * `GET /orgs/new` and `POST /orgs/new`. `?name=` fills the name: New lead
+ * on the list carries the search text.
+ */
 export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
-  app.get('/orgs/new', { config: { admin: true } }, async (request, reply) =>
-    reply
-      .type('text/html; charset=utf-8')
-      .send(renderPage(request, newOrgPage())),
+  app.get<{ Querystring: { name?: string } }>(
+    '/orgs/new',
+    { config: { admin: true } },
+    async (request, reply) => {
+      const name = formText(request.query.name);
+      return reply
+        .type('text/html; charset=utf-8')
+        .send(renderPage(request, newOrgPage(name ? { org: { name } } : {})));
+    },
   );
 
   app.post('/orgs/new', { config: { admin: true } }, async (request, reply) => {
@@ -144,6 +278,7 @@ export const orgsNewRoute = (app: FastifyInstance, db: Database) => {
       request.body,
       request.body,
       CONTACT,
+      { post: request.body, prefix: VISIT },
     );
     if ('error' in lead) {
       return reply

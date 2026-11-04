@@ -4,8 +4,8 @@ A homebrew CRM for a solo developer who sells software services door to door.
 It keeps contacts, visits, the pipeline and the GDPR records. Stripe keeps the
 billing. After sign-in, the seller has these pages:
 
-- `/` and `/orgs`: the Plan, one list of every organisation (one handler,
-  `routes/index.tsx`). The page is a rack over a band:
+- `/`: the Plan, the home. One list of every organisation, grouped by due
+  date (`routes/index.tsx`). The page is a rack over a band:
   - The glass reads the first organisation of the list (its name, its next
     action and its due date), the counts of Overdue and Today, and the
     rows that show. The plate keys are the pager: `Prev` and `Next`, 50
@@ -14,7 +14,8 @@ billing. After sign-in, the seller has these pages:
     (`All` and one key for each stage) and Sort. The sort keys are `Due`
     (the default), `Date added` and `Name`. `Date added` and `Name` sort
     ascending (green LED), then descending (red LED), then go back to
-    `Due`.
+    `Due`. `New lead` carries the search text to `/orgs/new?name=`. A
+    search with no match says so in the band, with a `New lead` link.
   - The band groups the organisations by the date of the next action:
     Overdue, Today, Next 7 days, Later and None. The sort sets the order in
     each group. `Due` puts the oldest due date first, then the newest last
@@ -28,8 +29,18 @@ billing. After sign-in, the seller has these pages:
   The URL holds the state: `?q=&stage=&sort=&dir=&page=`. With JavaScript,
   each key updates the page in place, and the focus stays where it was
   (see [Page rules](#page-rules)).
-- `/orgs/new`: the new lead. The organisation form and the contact form,
-  and one `Save` key. An empty URL slug comes from the name.
+- `/orgs`: the address book. The same handler, rack and keys as the Plan,
+  but the sort sets the groups of the band: `Name` (the default, A to Z)
+  groups by the first letter, `Date added` by the month added, and `Due`
+  by due date. It is not the home. The `orgs` link of the nav opens it.
+- `/orgs/new`: the new lead, as a rack. The glass reads what the save
+  sets: the name, the stage Lead, the source, the lawful basis, the first
+  contact and the first visit. The control unit holds Organisation,
+  Address, First contact and First visit (the Log form: the note, and one
+  `Save as visit` choice, with `None` on). `Save lead` on the plate saves
+  the organisation, its contact and its first visit in one press. `Cancel`
+  goes back to `/orgs`. An empty URL slug comes from the name, and
+  `?name=` fills the name.
 - `/orgs/<slug>`: one organisation, as a rack over the bands
   (`apps/crm/docs/002-rack.md`):
   - The glass reads the name (the one large value) and the address, the
