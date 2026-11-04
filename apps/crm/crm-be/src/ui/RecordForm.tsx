@@ -13,8 +13,7 @@ import { Module, type Span } from './Module';
 /**
  * The control of one field. `name` is the name in the post: the field name
  * after the prefix. With a `value`, a `keys` field shows latching keys, and
- * the LED of the current value is on. Its `save` key, if any, sends the
- * current value.
+ * the LED of the current value is on.
  *
  * `problem` is the word of a field with a problem (`Field`). `fixKey` is
  * the value of the key of a `keys` field that fixes the problem, for
@@ -76,7 +75,7 @@ const Control = ({
   if (field.type === 'keys') {
     const hints = field.hints ?? {};
     // A `<fieldset>`, not a `<label>`: a tap on a label taps its first key.
-    const group = (
+    return (
       <fieldset className={problem ? 'field problem' : 'field'}>
         <legend className="label">
           {field.label}
@@ -111,17 +110,6 @@ const Control = ({
           </Keys>
         ))}
       </fieldset>
-    );
-    if (!value || !field.save) return group;
-    return (
-      <>
-        {group}
-        <Keys>
-          <Key name={name} value={value}>
-            {field.save}
-          </Key>
-        </Keys>
-      </>
     );
   }
   const common = {

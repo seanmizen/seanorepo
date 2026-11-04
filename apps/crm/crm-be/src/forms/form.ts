@@ -44,12 +44,6 @@ export interface FormField {
    * example `then due` or `sets Lost` (`ui/Key.tsx`, `Sub`).
    */
   hints?: Record<string, string>;
-  /**
-   * `keys`: the text of one more key on an edit page, for example `Save`.
-   * It sends the current value, so it saves the other fields and keeps
-   * the value of this field.
-   */
-  save?: string;
   /** Change the trimmed text before the check, for example to capitals. */
   normalize?: (value: string) => string;
   /** The error when a value that is not empty is not valid. */

@@ -64,6 +64,12 @@ export interface PlateKey {
    */
   formId?: string;
   /**
+   * The `name` and the `value` that a key with `formId` sends, for example
+   * the type that is lit on the edit page of a visit.
+   */
+  name?: string;
+  value?: string;
+  /**
    * The form of a key that submits: its action, its method and its hidden
    * fields.
    */
@@ -84,6 +90,8 @@ const PlateControl = ({
   rel,
   on,
   formId,
+  name,
+  value,
   form,
 }: PlateKey) => {
   const captionId = `${id}-caption`;
@@ -115,7 +123,13 @@ const PlateControl = ({
   }
   if (formId) {
     return (
-      <Key id={id} form={formId} aria-describedby={captionId}>
+      <Key
+        id={id}
+        form={formId}
+        name={name}
+        value={value}
+        aria-describedby={captionId}
+      >
         {label}
       </Key>
     );

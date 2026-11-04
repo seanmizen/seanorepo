@@ -116,10 +116,20 @@ describe('the layout (REQ-CRM-LAYOUT-002)', () => {
       name: 'Acme Plumbing',
       contact_name: 'Ann Smith',
     });
+    await app.inject({
+      method: 'POST',
+      url: `/orgs/${slug}/activity`,
+      headers: {
+        cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: 'outcome=spoke&note=Hi',
+    });
     for (const url of [
       `/orgs/${slug}`,
       `/orgs/${slug}/edit`,
       `/orgs/${slug}/contacts/1`,
+      `/orgs/${slug}/activity/1`,
     ]) {
       const html = await get(url);
       expect(html).not.toContain('class="device');
