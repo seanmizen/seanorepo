@@ -111,7 +111,11 @@ fi
 
 # BatchMode, so a missing key fails at once and does not prompt for a password
 # that does not exist: the account accepts keys only.
-SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no
+# IdentitiesOnly, so ssh offers only $KEY. Without it, ssh offers each key in
+# the ssh-agent first. With five or more agent keys, sshd stops the connection
+# ("Too many authentication failures") before ssh offers $KEY. An agent that
+# holds $KEY still signs for it.
+SSH_OPTS=(-i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
           -o ConnectTimeout=5)
 
