@@ -23,6 +23,7 @@ services:
   frontend:
     <<: *action-base
     profiles: ["prod"]
+    restart: unless-stopped
     # The edge routes to this service by its alias (infra/edge).
     networks:
       default: {}

@@ -688,13 +688,18 @@ HW_EOF
     # Not installed anywhere: assert.sh runs them only against a scratch repo.
     # The copy keeps the paths of the checkout, because deploy.sh finds
     # scripts/log.sh by its path relative to deploy.sh (REQ-SERVER-019).
+    # The compose files of the apps go too: assert.sh reads their restart
+    # policies (REQ-SERVER-020).
     local root gen
+    local -a composes
     root="$(cd "$GEN_DIR/../../.." && pwd)"
     gen="$(cd "$GEN_DIR" && pwd)"
     gen="${gen#"$root"/}"
+    composes=("$root"/apps/*/docker-compose.yml)
+    composes=("${composes[@]#"$root"/}")
     COPYFILE_DISABLE=1 tar -C "$root" -cf - "$gen/services/deploy.sh" "$gen/services/release-poll.sh" \
         scripts/log.sh scripts/prod-docker-all.sh scripts/prod-docker-all.test.sh \
-        apps/crm/scripts/prod-docker.sh \
+        apps/crm/scripts/prod-docker.sh "${composes[@]}" \
         | ssh "${ssh_opts[@]}" "$target" "mkdir -p /tmp/under-test && tar -C /tmp/under-test -xf -" \
             > /dev/null 2>&1 || true
     ssh "${ssh_opts[@]}" "$target" \

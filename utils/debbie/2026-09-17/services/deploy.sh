@@ -152,12 +152,13 @@ marker_boot="$(sed -n 2p "$MARKER" 2> /dev/null || true)"
 # fail.
 marker_apps="$(sed -n 3p "$MARKER" 2> /dev/null || true)"
 
-# The boot id changes on every boot and on nothing else. Recording it alongside
-# the SHA is what brings the sites back after a power cut: no app compose file
-# sets a restart policy, so after a reboot the containers are down even though
-# `release` has not moved, and a SHA comparison alone would never notice. The
-# release poller triggers this unit after every run, so the first poll after a
-# boot is what finds it.
+# The boot id changes on every boot and on nothing else. With the boot id in
+# the marker, the deploy runs again after a boot, although `release` has not
+# moved. The restart policies of the apps (REQ-SERVER-020) start their
+# containers again. This deploy also starts each container that no policy
+# starts, for example the LAN edge. A restart of the Docker daemon alone does
+# not change the boot id, so only the policies cover it. The release poller
+# triggers this unit after every run, so the first poll after a boot finds it.
 boot_id="$(cat /proc/sys/kernel/random/boot_id 2> /dev/null || true)"
 
 reason=""

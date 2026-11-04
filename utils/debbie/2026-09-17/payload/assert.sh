@@ -1095,6 +1095,85 @@ else
     sk "a failed app does not stop the tunnel step, and the deploy exits non-zero" "setup-developer-environment.sh clones the checkout"
 fi
 
+# REQ-SERVER-020 - after a restart of the Docker daemon, each app runs again.
+#
+# The daemon stops each container with status 0, and then starts again only
+# the containers with `unless-stopped` or `always`. So each production service
+# (the profiles prod and demo) must have one of the two. `docker compose
+# config` resolves the anchors and the merges, so the check reads the policy
+# that compose gives to the container. --no-env-resolution: an env file that
+# is only on the server (apps/*/.env) must not stop the check.
+#
+# Prints each service that breaks the rule, as "file: service (policy)", and
+# each file that compose cannot read. Returns 0 when there is none. An empty
+# compose file has no service.
+compose_restart_faults() {
+    local f json bad=0
+    for f in "$@"; do
+        [ -s "$f" ] || continue
+        if ! json="$(docker compose -f "$f" --profile prod --profile demo config --no-env-resolution --format json 2> /dev/null)"; then
+            echo "$f: docker compose cannot read it"
+            bad=1
+            continue
+        fi
+        printf '%s' "$json" | node -e '
+                let s = "";
+                process.stdin.on("data", (d) => (s += d)).on("end", () => {
+                    let bad = 0;
+                    for (const [name, svc] of Object.entries(JSON.parse(s).services ?? {})) {
+                        const r = svc.restart ?? "none";
+                        if (r !== "unless-stopped" && r !== "always") {
+                            console.log(`${process.argv[1]}: ${name} (${r})`);
+                            bad = 1;
+                        }
+                    }
+                    process.exit(bad);
+                });' "$f" \
+            || bad=1
+    done
+    return "$bad"
+}
+
+echo
+echo "== restart policies (REQ-SERVER-020) =="
+if [ "$PHASE" = provisioned ]; then
+    # The check itself, against compose files that break the rule in each
+    # way. A dev service has no policy, and the check must not report it.
+    check "the restart check finds a production service with no policy or with on-failure" \
+        't=$(mktemp -d); trap "rm -rf $t" EXIT;
+         printf "%s\n" "services:" \
+             "  good: {image: busybox, profiles: [prod], restart: unless-stopped}" \
+             "  none: {image: busybox, profiles: [prod]}" \
+             "  quits: {image: busybox, profiles: [demo], restart: on-failure}" \
+             "  dev: {image: busybox, profiles: [dev]}" > "$t/docker-compose.yml";
+         out=$(compose_restart_faults "$t/docker-compose.yml") && exit 1;
+         [ "$(printf "%s\n" "$out" | sed "s|^$t/docker-compose.yml: ||" | sort | tr "\n" " ")" = "none (none) quits (on-failure) " ]'
+
+    # The compose files of the commit under test. The VM harness copies them
+    # beside the deploy scripts. On metal, the checkout's own files.
+    restart_root=
+    if [ -n "${UNDER_TEST_DIR:-}" ] && [ -d "$UNDER_TEST_DIR/../../../../apps" ]; then
+        restart_root="$(cd "$UNDER_TEST_DIR/../../../.." && pwd)"
+    elif [ -d "$REPO_DIR/apps" ]; then
+        restart_root="$REPO_DIR"
+    fi
+    if [ -n "$restart_root" ]; then
+        restart_rc=0
+        restart_faults="$(compose_restart_faults "$restart_root"/apps/*/docker-compose.yml)" || restart_rc=1
+        [ -n "$restart_faults" ] && printf '%s\n' "$restart_faults" | sed 's/^/  /'
+        check "each production service of the apps has restart unless-stopped or always" \
+            '[ "$restart_rc" = 0 ]'
+    else
+        sk "each production service of the apps has restart unless-stopped or always" \
+            "no apps directory at $REPO_DIR or under UNDER_TEST_DIR"
+    fi
+else
+    sk "the restart check finds a production service with no policy or with on-failure" \
+        "setup-developer-environment.sh installs docker"
+    sk "each production service of the apps has restart unless-stopped or always" \
+        "setup-developer-environment.sh clones the checkout"
+fi
+
 # REQ-DEPLOY-005 - the security boundary, asserted as a boundary.
 #
 # "A file exists" is not the claim. The claim is that this drop-in authorises
