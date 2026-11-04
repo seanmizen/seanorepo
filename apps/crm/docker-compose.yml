@@ -35,16 +35,26 @@ x-crm-env-file: &crm-env-file
 
 # The Litestream sidecar of a crm database. Config: litestream.yml. Each
 # sidecar sets CRM_R2_PATH, the prefix of its backup files in the bucket.
-# With no CRM_R2_BUCKET, the container prints that replication is off and
-# stops with status 0. on-failure does not start it again then.
+#
+# unless-stopped, as each other production service (REQ-SERVER-020). When the
+# Docker daemon restarts, it stops each container with status 0. on-failure
+# then does not start the sidecar again, and the database has no backup until
+# the next deploy.
+#
+# With no CRM_R2_BUCKET, the container prints that replication is off one
+# time, and then waits with no work. It does not stop, so unless-stopped does
+# not start it again in a loop. The trap stops it at once on `docker stop`.
 x-litestream-base: &litestream-base
   image: litestream/litestream:0.5.17
-  restart: on-failure
+  restart: unless-stopped
   entrypoint: ['/bin/sh', '-c']
   command:
     - |
       if [ -z "$$CRM_R2_BUCKET" ]; then
-        echo "litestream: CRM_R2_BUCKET is not set. Replication is off."
+        echo "litestream: CRM_R2_BUCKET is not set. Replication is off. The container waits."
+        trap 'exit 0' TERM
+        sleep infinity &
+        wait
         exit 0
       fi
       if [ -z "$$CRM_R2_PATH" ]; then

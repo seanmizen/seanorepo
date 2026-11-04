@@ -752,3 +752,41 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
     every app after a failure, with the build output at debug"
 - **Relations:**
   - refines REQ-DEPLOY-002
+
+## REQ-SERVER-020 — A restart of Docker brings each app back
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1132
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** When the Docker daemon starts again, each production
+  container of the apps that ran before the daemon stopped shall run again,
+  with no deploy.
+- **Rationale:** An upgrade of the Docker package restarts the daemon. A
+  provisioning run and an unattended upgrade can each do this, and a reboot
+  does the same. The daemon stops each container with status 0. Then it starts
+  again only the containers with the restart policy `unless-stopped` or
+  `always`. With `on-failure`, a container that stopped with status 0 stays
+  down. With no policy, each container stays down.
+
+  The Litestream sidecar is the backup of the CRM database to R2. When it is
+  down, no change goes to R2, and nothing reports it. The deploy after a
+  reboot (the boot id in `deploy.sh`) does not help here, because a restart of
+  the daemon does not change the boot id.
+
+  So each production service of the apps has `restart: unless-stopped`. A
+  service with no work does not stop. It waits. For example, the sidecar with
+  no `CRM_R2_BUCKET` prints that replication is off, and then waits. A
+  container that stops with status 0 under `unless-stopped` would start again
+  in a loop.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "the restart check
+    finds a production service with no policy or with on-failure"
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "each production
+    service of the apps has restart unless-stopped or always"
+  - Demonstration — on the webserver, `sudo systemctl restart docker`. Then
+    `docker ps` shows each container of the apps that ran before.
+- **Relations:**
+  - refines REQ-SERVER-006
+  - refines REQ-DEPLOY-002
