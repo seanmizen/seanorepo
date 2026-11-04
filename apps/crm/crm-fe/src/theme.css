@@ -30,7 +30,8 @@
  *    The page is at most 1680px wide, at the top left. The app links are in
  *    the footer row.
  * 4. Narrow: one column, in the order of the HTML. The ears of the rack
- *    go, each module has the full width, and each band row folds to two
+ *    go, a control unit with tabs is the phone window (one module wide),
+ *    each other module has the full width, and each band row folds to two
  *    lines. The page margin is 1px. On a page with the mode keys (Plan,
  *    Work, Review), the app links are over the footer, as on a wide
  *    screen.
@@ -754,28 +755,48 @@ button.link:disabled {
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* A narrow screen: the display unit is compact, because it stays at the
+   top of a tall window, and the phone window and the band need the rest
+   of the screen. */
 @media (width < 960px) {
   .faceplate {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.5em;
-    padding: 0.5em;
+    gap: 0.4em;
+    padding: 0.4em;
   }
   .glass {
-    padding: 0.5em 0.65em;
+    gap: 0.3em;
+    padding: 0.4em 0.6em;
+  }
+  .glass > .status {
+    padding-bottom: 0.3em;
   }
   /* The readings fold: the name has its own row, and the rest share the
      next row in thirds. */
   .strip {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    row-gap: 0.5em;
+    row-gap: 0.3em;
   }
   .strip > div {
     padding: 0 0.6em;
   }
+  .strip dt {
+    margin-bottom: 0;
+    font-size: 0.62em;
+  }
+  .strip :is(.text, .wide) > .value {
+    font-size: 1em;
+  }
+  .strip .line {
+    font-size: 0.85em;
+  }
+  .plate {
+    gap: 0.3em;
+  }
   .strip > .name {
     grid-column: 1 / -1;
-    padding: 0 0 0.5em;
+    padding: 0 0 0.3em;
     border-left: 0;
     border-bottom: 1px solid var(--ghost);
   }
@@ -788,10 +809,10 @@ button.link:disabled {
     grid-column: 1 / -1;
   }
   .strip .name > .value {
-    font-size: 1.35em;
+    font-size: 1.2em;
   }
   .strip .count > .value {
-    font-size: 1.7em;
+    font-size: 1.4em;
   }
   .plate-row,
   .plate-row.modes,
@@ -858,6 +879,89 @@ button.link:disabled {
 @media (width < 960px) {
   .modules .module {
     grid-column: 1 / -1;
+  }
+}
+
+/* The phone window (apps/crm/docs/002-rack.md, Phone window): a control
+   unit with tabs (ui/ControlUnit.tsx). On a wide screen the tabs go, and
+   the modules are side by side. On a narrow screen the modules are one row
+   that scrolls sideways, one module wide, and each module snaps to the
+   left edge. Each module is a little narrower than the window, so the
+   edge of the next module shows. The window scrolls, and the page never
+   scrolls sideways. Each tab is an anchor link to its module: a link to an
+   element in a scroll box scrolls the box, so the tabs work with no
+   JavaScript. crm-fe/src/window.ts lights the LED of the tab in view. */
+.deck {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.tabs {
+  display: none;
+}
+@media (width < 960px) {
+  .tabs {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 2px;
+  }
+  .tabs a {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 0.25em;
+    min-height: 44px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.68em;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  /* A label that does not fit its tab ends in an ellipsis. */
+  .tabs a > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The LED of a tab: lit red when its module is in view. */
+  .tabs a::before {
+    content: "";
+    width: 2em;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .tabs a[aria-current] {
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .tabs a[aria-current]::before {
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent);
+  }
+  .deck > .modules {
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .deck > .modules::-webkit-scrollbar {
+    display: none;
+  }
+  .deck .module {
+    flex: 0 0 calc(100% - 2.2rem);
+    box-sizing: border-box;
+    scroll-snap-align: start;
   }
 }
 .module > h2 {
@@ -1461,14 +1565,64 @@ button.link:disabled {
 }
 
 /* Touch targets are at least 44px high on a narrow screen and under a
-   finger, as in REQ-DENSE-006 of autosam. */
+   finger, as in REQ-DENSE-006 of autosam. A text link in a line gets the
+   height in its padding, which does not move the line. A row of the band
+   whose name is a link is one target: the link covers the row. */
 @media (width < 960px), (pointer: coarse) {
   .key,
-  .field :is(input, select) {
+  .field :is(input, select, textarea) {
     min-height: 44px;
   }
   .box .key {
     min-height: 44px;
+  }
+  :is(.title, .links, .foot-links, .band-head, .chart td) a {
+    padding-block: 13px;
+  }
+  :is(.links, .row-actions) button.link {
+    margin-block: -12px;
+    padding-block: 12px;
+  }
+  .chart tbody tr:has(> th.c-name > a) {
+    position: relative;
+  }
+  .chart tbody th.c-name > a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/* The display unit stays at the top of a window 720px or taller, so the
+   glass and the plate keys (Save, Save lead, Prev, Next) stay in reach
+   while the controls and the band scroll (apps/crm/docs/002-rack.md,
+   detail 8). This is the one height query (REQ-CRM-LAYOUT-002). The rack
+   adds no box here, so the display unit can stay over the band: each unit
+   takes its part of the chassis. In a shorter window, or at 200% zoom,
+   the display unit scrolls with the page. */
+@media (height >= 720px) {
+  .rack {
+    display: contents;
+  }
+  .rack > .unit {
+    padding: 2px;
+    background: var(--line);
+  }
+  .rack > .unit.display {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-top: 0.75em;
+    border-radius: 6px 6px 0 0;
+  }
+  .rack > .unit.display:not(:last-child) {
+    padding-bottom: 0;
+  }
+  .rack > .unit.display:last-child {
+    border-radius: 6px;
+  }
+  .rack > .unit.controls {
+    border-radius: 0 0 6px 6px;
   }
 }
 /* A link key and a button key on the plate have one height and fill the
@@ -1619,6 +1773,11 @@ fieldset.field.problem {
 .band-head > .tools .key {
   min-height: 1.9em;
   font-size: 0.9em;
+}
+@media (width < 960px), (pointer: coarse) {
+  .band-head > .tools .key {
+    min-height: 44px;
+  }
 }
 /* A row with no link has no arrow: it opens nothing. */
 .chart tbody th:not(:has(> a)) > .arrow {

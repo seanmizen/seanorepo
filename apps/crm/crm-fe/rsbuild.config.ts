@@ -10,8 +10,14 @@ export default defineConfig({
   source: {
     entry: {
       // morph.ts updates the page in place after each press
-      // (REQ-CRM-MORPH-001).
-      main: ['./src/main.ts', './src/morph.ts', './src/theme.css'],
+      // (REQ-CRM-MORPH-001). window.ts moves the phone window of the
+      // control unit.
+      main: [
+        './src/main.ts',
+        './src/morph.ts',
+        './src/window.ts',
+        './src/theme.css',
+      ],
       // Only the pages with a passkey control load this entry: /login,
       // /account/passkeys and the 403 page of an admin route.
       passkeys: './src/passkeys.ts',

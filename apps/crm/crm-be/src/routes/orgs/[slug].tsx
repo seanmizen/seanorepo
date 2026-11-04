@@ -746,6 +746,17 @@ const walkKeys = (order: RunningOrder, walk: Walk): PlateKey[] => {
   });
 };
 
+/**
+ * The module that a press of the control unit lands on: Next action
+ * (`apps/crm/docs/002-rack.md`, Phone window). The task at a door goes
+ * from left to right: Log, then Stage, then Next action, and each visit
+ * ends with the next action. So each form of the control unit has this
+ * `#hash` in its action. The redirect keeps it (a redirect with no hash
+ * keeps the hash of the request), and on a phone the window moves to the
+ * module with no page jump (`crm-fe/src/window.ts`, REQ-CRM-MORPH-001).
+ */
+const NEXT = '#next';
+
 /** The due keys of the Next action module: each one sets a date. */
 const DUE_KEYS = [
   { label: 'Tomorrow', days: 1 },
@@ -872,10 +883,16 @@ export const orgPage = ({
             counts: modes,
           })}
         />
-        <ControlUnit>
+        <ControlUnit
+          tabs={[
+            { id: 'log', label: 'Log' },
+            { id: 'stage', label: 'Stage' },
+            { id: 'next', label: 'Next action' },
+          ]}
+        >
           <form
             method="post"
-            action={`${orgPath(org.slug, 'activity')}${search}`}
+            action={`${orgPath(org.slug, 'activity')}${search}${NEXT}`}
           >
             <RecordForm
               form={activityForm}
@@ -894,7 +911,7 @@ export const orgPage = ({
           >
             <form
               method="post"
-              action={`${orgPath(org.slug, 'stage')}${search}`}
+              action={`${orgPath(org.slug, 'stage')}${search}${NEXT}`}
             >
               <input
                 type="hidden"
@@ -930,7 +947,7 @@ export const orgPage = ({
           >
             <form
               method="post"
-              action={`${orgPath(org.slug, 'stage')}${search}`}
+              action={`${orgPath(org.slug, 'stage')}${search}${NEXT}`}
             >
               <input type="hidden" name="stage" value={org.stage} />
               <Field label="Action">
@@ -974,7 +991,7 @@ export const orgPage = ({
             </form>
             <form
               method="post"
-              action={`${orgPath(org.slug, 'stage')}${search}`}
+              action={`${orgPath(org.slug, 'stage')}${search}${NEXT}`}
             >
               <input type="hidden" name="stage" value={org.stage} />
               <input type="hidden" name="next_action" value="" />

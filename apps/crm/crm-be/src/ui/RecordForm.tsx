@@ -150,7 +150,9 @@ const Control = ({
  *   the post with the same prefix.
  * - `label` replaces the label of the first module, for example "Add a
  *   contact".
- * - `id` goes on the first module, as the target of a link.
+ * - `id` goes on the first module, as the target of a link. `ids` gives
+ *   each module its id, in order, for example for the tabs of the phone
+ *   window (`ControlUnit`).
  * - `children` go at the end of the last module, for example its `Save`
  *   key.
  * - `span` is the width of each module on the grid of its unit.
@@ -166,6 +168,7 @@ export const RecordForm = ({
   prefix = '',
   label,
   id,
+  ids = [],
   span,
   problem,
   fixKey,
@@ -177,6 +180,7 @@ export const RecordForm = ({
   prefix?: string;
   label?: string;
   id?: string;
+  ids?: string[];
   span?: Span;
   problem?: FieldProblem;
   fixKey?: string;
@@ -188,7 +192,7 @@ export const RecordForm = ({
       <Module
         key={module.label}
         label={i === 0 && label ? label : module.label}
-        id={i === 0 ? id : undefined}
+        id={ids[i] ?? (i === 0 ? id : undefined)}
         span={span}
       >
         {module.fields.map((field) => (

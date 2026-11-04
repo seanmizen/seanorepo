@@ -136,7 +136,7 @@ describe('the running order (apps/crm/docs/002-rack.md)', () => {
       '/orgs/alpha/contacts',
     ]) {
       expect(html).toContain(
-        `action="${action}${search.replace('&', '&amp;')}"`,
+        `action="${action}${search.replace('&', '&amp;')}${action.endsWith('contacts') ? '' : '#next'}"`,
       );
     }
     const saved = await post(`/orgs/alpha/activity${search}`, {

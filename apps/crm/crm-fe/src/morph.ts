@@ -131,9 +131,10 @@ const go = async ({ url, init, form, pop, fallback }: Press) => {
 
   const next = new DOMParser().parseFromString(html, 'text/html');
   // The URL of the new page. fetch drops the `#hash`: keep the hash of the
-  // request when there was no redirect.
+  // request. A redirect with no hash keeps the hash of the request, as in
+  // a full load, so a form with `#next` in its action lands on #next.
   const target = new URL(response.url);
-  if (!response.redirected) target.hash = url.hash;
+  target.hash = url.hash;
   const post = init.method === 'POST';
   // A post with no redirect shows its page at the URL of the page on screen,
   // so a reload does not send a GET to a POST-only path.
@@ -151,7 +152,8 @@ const go = async ({ url, init, form, pop, fallback }: Press) => {
   const [x, y] = [scrollX, scrollY];
 
   if (pop === undefined) {
-    if (target.href === location.href) {
+    // The same URL with a new `#hash` replaces the entry too.
+    if (target.href.split('#')[0] === location.href.split('#')[0]) {
       history.replaceState(history.state, '', target);
     } else {
       saveScroll();

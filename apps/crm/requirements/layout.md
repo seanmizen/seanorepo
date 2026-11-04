@@ -54,7 +54,7 @@ screen gets.
 
 - **Status:** active
 - **Source:** sean
-- **Origin:** #1116, #1122, #1125
+- **Origin:** #1116, #1122, #1125, #1126
 - **Type:** constraint
 - **Priority:** P1
 - **Statement:** The crm theme shall lay out each page as the rack over the
@@ -70,8 +70,12 @@ screen gets.
   width breakpoint (wide), the page is at most 1680px wide and starts at
   the top left, and the line of nav links is in the footer row. Below the
   width breakpoint (narrow), the page is one column in the order of the
-  HTML: the ears go, each module has the full width, each band row folds
-  to two lines, and the outer page margin is 1px. On a page with the mode
+  HTML: the ears go, each band row folds to two lines, and the outer page
+  margin is 1px. A control unit with tabs is the phone window: one module
+  wide, with the tabs (anchor links) over it, and only the window scrolls
+  sideways. Each other module has the full width. Phone targets are at
+  least 44px high. In a window 720px or taller, the display unit stays at
+  the top of the page. On a page with the mode
   keys (Plan, Work and Review on the plate), the line of nav links shows
   over the footer at each width, because the mode keys are the way between
   the views. No row of the page wraps at a width that its content sets.
@@ -94,6 +98,7 @@ screen gets.
   - Test — `apps/crm/crm-be/src/layout.test.ts` › "every width media query in theme.css uses the one breakpoint, each height query uses 720px, and no row of the page wraps (REQ-CRM-LAYOUT-002)"
   - Test — `apps/crm/crm-be/src/layout.test.ts` › "the home is the rack over the band: the display unit, then the control unit on a grid of 12, then the band (REQ-CRM-LAYOUT-002)"
   - Test — `apps/crm/crm-be/src/layout.test.ts` › "the organisation page and its edit pages are the rack: the display unit of the record, then the control unit, then the bands (REQ-CRM-LAYOUT-002)"
+  - Test — `apps/crm/crm-be/src/layout.test.ts` › "on a narrow screen the control unit is the phone window: tabs over modules that scroll sideways, one module wide (REQ-CRM-LAYOUT-002)"
   - Test — `apps/crm/crm-be/src/layout.test.ts` › "a page with a device keeps the 40/60 grid: the left column holds only the device, and each section of data is a Box (REQ-CRM-LAYOUT-002)"
   - Test — `apps/crm/crm-be/src/layout.test.ts` › "the nav links are in the HTML once, under the path title (REQ-CRM-LAYOUT-002)"
   - Demonstration — `node apps/crm/scripts/shoot.mjs` shoots each page at six widths: the breakpoint minus 1px, the breakpoint, the breakpoint plus 24px, 390px, 1200px and 1440px. It prints each page that scrolls sideways. Look at each image.

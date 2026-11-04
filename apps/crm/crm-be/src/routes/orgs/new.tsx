@@ -19,7 +19,7 @@ import {
 } from '../../forms/organisation';
 import { findOrg, formText, orgPath, resolveSlug } from '../../org';
 import { type PageParts, renderPage } from '../../render';
-import { ControlUnit } from '../../ui/ControlUnit';
+import { ControlUnit, type WindowTab } from '../../ui/ControlUnit';
 import { DisplayUnit } from '../../ui/DisplayUnit';
 import { Rack } from '../../ui/Rack';
 import { RecordForm } from '../../ui/RecordForm';
@@ -32,6 +32,14 @@ const VISIT = 'visit_';
 
 /** The id of the new-lead form. Save lead on the plate submits it. */
 const FORM_ID = 'new-lead';
+
+/** The tabs of the phone window: one for each module, in order. */
+const NEW_LEAD_TABS: WindowTab[] = [
+  { id: 'organisation', label: 'Organisation' },
+  { id: 'address', label: 'Address' },
+  { id: 'first-contact', label: 'Contact' },
+  { id: 'first-visit', label: 'Visit' },
+];
 
 /** The form of a new lead with the problem of the last post. */
 export type LeadForm = 'org' | 'contact' | 'visit';
@@ -110,10 +118,11 @@ export const newOrgPage = ({
             },
           ]}
         />
-        <ControlUnit>
+        <ControlUnit tabs={NEW_LEAD_TABS}>
           <form id={FORM_ID} method="post" action="/orgs/new">
             <RecordForm
               form={organisationForm}
+              ids={['organisation', 'address']}
               values={org}
               span={3}
               problem={marked('org')}
@@ -122,6 +131,7 @@ export const newOrgPage = ({
               form={contactForm}
               values={contact}
               prefix={CONTACT}
+              id="first-contact"
               label="First contact"
               span={3}
               problem={marked('contact')}
@@ -130,6 +140,7 @@ export const newOrgPage = ({
               form={activityForm}
               values={visit}
               prefix={VISIT}
+              id="first-visit"
               label="First visit"
               span={3}
               problem={marked('visit')}

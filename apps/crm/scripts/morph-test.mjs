@@ -26,6 +26,9 @@
  *    and tap a Log key. The note saves, the page does not load again, the
  *    Log key keeps the focus, the scroll position does not change, and the
  *    history has no new entry (the post redirects to the same URL).
+ *    On a phone (390 x 844), Call back moves the window of the control
+ *    unit to Next action, and a tap on the Stage tab moves it to Stage.
+ *    The page does not scroll up or down, or sideways.
  * 4. Open an organisation from the list. The URL goes into history. Back
  *    shows the list, and Forward shows the organisation, with no load.
  *    Next on the plate opens the next organisation of the running order,
@@ -343,15 +346,69 @@ try {
   assert.ok(
     await key.evaluate((element) => element === document.activeElement),
   );
-  assert.equal(after.url, before.url);
+  // The Log form lands on Next action (the phone window).
+  assert.equal(after.url, `${before.url}#next`);
   assert.equal(after.length, before.length, 'The same URL replaces.');
   assert.equal(after.note, '', 'The Log form is empty after the save.');
   console.log(
     `ok: a Log press saves in place, with focus and scroll kept (scrollY ${after.y})`,
   );
 
+  // 3b: the phone window. Call back saves the visit, and the window moves
+  // to Next action with no page jump. A tap on a tab moves the window, and
+  // the page does not scroll up or down or sideways.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${BASE}${ORG}`);
+  await page.evaluate(() => {
+    window.morphMark = 'still here';
+    scrollTo(0, 60);
+  });
+  const windowState = () =>
+    page.evaluate(() => {
+      const win = document.querySelector('.deck > .modules');
+      return {
+        y: scrollY,
+        left: win.scrollLeft,
+        tab: document.querySelector('.tabs a[aria-current]')?.textContent,
+        sideways: document.documentElement.scrollWidth > innerWidth,
+        mark: window.morphMark,
+      };
+    });
+  // True when the window shows the module `id` at its left edge, or is at
+  // its end (the last module is narrower than the window).
+  const atModule = (id) => {
+    const win = document.querySelector('.deck > .modules');
+    const end = win.scrollWidth - win.clientWidth;
+    const left = Math.min(document.getElementById(id).offsetLeft, end);
+    return Math.abs(win.scrollLeft - left) <= 1;
+  };
+  const start = await windowState();
+  assert.equal(start.left, 0, 'The window starts at Log.');
+  assert.equal(start.tab, 'Log');
+  assert.equal(start.sideways, false, 'The page does not scroll sideways.');
+  const callCount = await events(page);
+  await page.locator('textarea[name="note"]').fill('Back on Friday');
+  await page.locator('button[name="outcome"][value="call_back"]').click();
+  await waitForEvents(page, callCount + 1);
+  await page.waitForFunction(atModule, 'next');
+  const landed = await windowState();
+  assert.equal(landed.mark, 'still here', 'The page did not load again.');
+  assert.equal(landed.y, start.y, 'The page did not jump.');
+  assert.equal(landed.tab, 'Next action');
+  assert.equal(new URL(page.url()).hash, '#next');
+  await page.locator('.tabs a[href="#stage"]').click();
+  await page.waitForFunction(atModule, 'stage');
+  const tapped = await windowState();
+  assert.equal(tapped.y, start.y, 'A tab tap does not scroll the page.');
+  assert.equal(tapped.tab, 'Stage');
+  assert.equal(tapped.sideways, false);
+  console.log(
+    'ok: Call back lands on Next action in the phone window, and a tab moves the window, with no page jump',
+  );
+
   // 4: a link goes into history, and Back and Forward work in place.
   await page.setViewportSize({ width: 1200, height: 800 });
+  const historyBefore = await page.evaluate(() => history.length);
   await page.locator('h1 a[href="/"]').click();
   await page.waitForFunction(
     () => document.querySelectorAll('.chart tbody th a').length === 4,
@@ -359,7 +416,7 @@ try {
   assert.equal(new URL(page.url()).pathname, '/');
   assert.equal(
     await page.evaluate(() => history.length),
-    before.length + 1,
+    historyBefore + 1,
     'A changed URL goes into history.',
   );
   await page.locator('.chart tbody th a', { hasText: 'Clapham Cafe' }).click();

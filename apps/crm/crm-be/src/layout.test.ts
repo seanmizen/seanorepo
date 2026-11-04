@@ -159,6 +159,36 @@ describe('the layout (REQ-CRM-LAYOUT-002)', () => {
     expect(THEME).toMatch(/\.bands \{[^}]*grid-template-columns: repeat\(12/);
   });
 
+  test('on a narrow screen the control unit is the phone window: tabs over modules that scroll sideways, one module wide (REQ-CRM-LAYOUT-002)', async () => {
+    const slug = await addOrg(app, cookie, { name: 'Acme Plumbing' });
+    for (const url of ['/', '/orgs', `/orgs/${slug}`, '/orgs/new']) {
+      const deck = divOf(await get(url), 'deck');
+      // Each tab is an anchor link to a module of the unit.
+      const tabs = [...deck.matchAll(/<a href="#([\w-]+)">/g)].map(
+        (match) => match[1],
+      );
+      expect(tabs.length).toBeGreaterThan(2);
+      for (const id of tabs) {
+        expect(deck).toContain(`<section id="${id}" class="module`);
+      }
+    }
+    // The window scrolls sideways and snaps to each module. The page does
+    // not: no flex row of the page wraps, and the window is the one box
+    // that scrolls.
+    expect(THEME).toMatch(
+      /\.deck > \.modules \{[^}]*overflow-x: auto;[^}]*scroll-snap-type: x mandatory;/,
+    );
+    expect(THEME).toMatch(
+      /\.deck \.module \{[^}]*flex: 0 0 calc\(100% - 2\.2rem\);[^}]*scroll-snap-align: start;/,
+    );
+    // The display unit stays at the top only in a window 720px or taller.
+    expect(THEME).toMatch(
+      /@media \(height >= 720px\) \{[\s\S]*?\.rack > \.unit\.display \{\s*position: sticky;/,
+    );
+    // Phone targets are at least 44px.
+    expect(THEME).toMatch(/\.tabs a \{[^}]*min-height: 44px;/);
+  });
+
   test('a page with a device keeps the 40/60 grid: the left column holds only the device, and each section of data is a Box (REQ-CRM-LAYOUT-002)', async () => {
     // The wide grid is 40% and 60%, in fractions.
     expect(THEME).toContain(

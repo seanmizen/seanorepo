@@ -34,6 +34,10 @@ loads the full page, as a plain HTML page does.
   - A link to a different path goes to the top of the new page, or to the
     target of its `#hash`, as a full load does. The scroll position stays
     on the same path.
+  - A redirect with no `#hash` keeps the hash of the request, as a full
+    load does. So a form with `#next` in its action lands on #next: on a
+    phone the window of the control unit moves to Next action
+    (`crm-fe/src/window.ts`), and the page does not scroll.
   - On the same path, a text field that the person changed outside the
     submitted form keeps its text, and a `<details>` that the person
     opened stays open.
@@ -47,6 +51,7 @@ loads the full page, as a plain HTML page does.
     so each form and link loads the full page (REQ-CRM-BARE-001).
 - **Verification:**
   - Test — `apps/crm/scripts/morph-test.mjs` › "ok: a Log press saves in place, with focus and scroll kept"
+  - Test — `apps/crm/scripts/morph-test.mjs` › "ok: Call back lands on Next action in the phone window, and a tab moves the window, with no page jump"
   - Test — `apps/crm/crm-be/src/routes/index.test.ts` › "each key of the list is a plain form or link, and the search field has an id (REQ-CRM-MORPH-001)"
 - **Relations:**
   - depends-on REQ-CRM-BARE-001
