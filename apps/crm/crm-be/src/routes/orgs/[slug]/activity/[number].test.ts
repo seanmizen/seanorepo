@@ -228,6 +228,25 @@ describe('POST /orgs/<slug>/activity/<number>', () => {
     expect(JSON.parse(lastAudit().detail).fields).toEqual(['note']);
   });
 
+  test('the Save key saves a change to the text alone, with the type that is lit (REQ-CRM-BUTTON-001)', async () => {
+    const { number } = await log('spoke', 'Old text');
+    const html = (
+      await app.inject({
+        method: 'GET',
+        url: `/orgs/${slug}/activity/${number}`,
+        headers: { cookie },
+      })
+    ).body;
+    expect(html).toContain(
+      '<button type="submit" class="key" value="spoke" name="outcome">Save</button>',
+    );
+    await edit(number, { outcome: 'spoke', note: 'New text' });
+    expect(db.query('SELECT outcome, note FROM visit;').all()).toEqual([
+      { outcome: 'spoke', note: 'New text' },
+    ]);
+    expect(JSON.parse(lastAudit().detail).fields).toEqual(['note']);
+  });
+
   test('a save with no change writes nothing', async () => {
     const { number } = await log('spoke', 'Same');
     await edit(number, { outcome: 'spoke', note: 'Same' });

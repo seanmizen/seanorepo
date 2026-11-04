@@ -8,7 +8,8 @@ import { Module } from './Module';
 /**
  * The control of one field. `name` is the name in the post: the field name
  * after the prefix. With a `value`, a `keys` field shows latching keys, and
- * the LED of the current value is on.
+ * the LED of the current value is on. Its `save` key, if any, sends the
+ * current value.
  */
 const Control = ({
   field,
@@ -22,7 +23,7 @@ const Control = ({
   const options = field.options ?? {};
   if (field.type === 'keys') {
     // A `<fieldset>`, not a `<label>`: a tap on a label taps its first key.
-    return (
+    const group = (
       <fieldset className="field">
         <legend className="label">{field.label}</legend>
         {(field.rows ?? [Object.keys(options)]).map((row) => (
@@ -46,6 +47,17 @@ const Control = ({
           </Keys>
         ))}
       </fieldset>
+    );
+    if (!value || !field.save) return group;
+    return (
+      <>
+        {group}
+        <Keys>
+          <Key name={name} value={value}>
+            {field.save}
+          </Key>
+        </Keys>
+      </>
     );
   }
   const common = {
