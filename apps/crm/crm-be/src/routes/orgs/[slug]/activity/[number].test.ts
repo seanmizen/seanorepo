@@ -73,11 +73,14 @@ describe('GET /orgs/<slug>/activity/<number>', () => {
       '<button type="submit" class="key latch" aria-pressed="true" value="spoke" name="outcome">Spoke',
     );
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
-    expect(bodyText(divOf(html, 'lcd'))).toMatch(
-      /^Organisation Acme Logged \d{4}-[A-Z][a-z]{2}-\d\d \d\d:\d\d Type Visit, Spoke$/,
+    // The rack, as the other edit pages (REQ-CRM-LAYOUT-002): the glass
+    // reads the entry, and the Log module is in the control unit.
+    expect(html).not.toContain('class="device');
+    expect(bodyText(divOf(html, 'glass'))).toMatch(
+      /^Visit 1 Acme \d{4}-[A-Z][a-z]{2}-\d\d \d\d:\d\d · Visit, Spoke Text Owner keen$/,
     );
-    expect(html).toContain(
-      '<form action="/orgs/acme/activity/1" method="post">',
+    expect(divOf(html, 'unit controls')).toMatch(
+      /<form (?=[^>]*id="activity-edit")(?=[^>]*action="\/orgs\/acme\/activity\/1")[^>]*method="post"[^>]*><section id="log" class="module span-12"><h2 class="label">Log<\/h2>/,
     );
     expect(bodyText(html)).toStartWith('crm / orgs / acme / activity / 1 ');
   });
@@ -94,7 +97,8 @@ describe('GET /orgs/<slug>/activity/<number>', () => {
     expect(html).toContain(
       '<button type="submit" class="key latch" aria-pressed="true" value="note" name="outcome">Note only',
     );
-    expect(bodyText(divOf(html, 'lcd'))).toEndWith(' Type Note');
+    expect(bodyText(divOf(html, 'glass'))).toContain(' · Note Text A note');
+    expect(html).toContain('<title>Note 1 - Acme - crm</title>');
   });
 
   test('a visit and a note share one counter in each organisation (REQ-CRM-ID-001)', async () => {
@@ -237,9 +241,17 @@ describe('POST /orgs/<slug>/activity/<number>', () => {
         headers: { cookie },
       })
     ).body;
-    expect(html).toContain(
-      '<button type="submit" class="key" value="spoke" name="outcome">Save</button>',
+    // Save is on the plate. It submits the form by its id, with the type
+    // that is lit, and its caption names the entry.
+    const save = /<button[^>]* id="save"[^>]*>Save<\/button>/.exec(html)?.[0];
+    expect(save).toContain('form="activity-edit"');
+    expect(save).toContain('name="outcome"');
+    expect(save).toContain('value="spoke"');
+    expect(divOf(html, 'plate')).toContain(
+      '<span class="caption" id="save-caption">Visit 1</span>',
     );
+    // The Log module has no second Save.
+    expect(html.match(/>Save</g)).toHaveLength(1);
     await edit(number, { outcome: 'spoke', note: 'New text' });
     expect(db.query('SELECT outcome, note FROM visit;').all()).toEqual([
       { outcome: 'spoke', note: 'New text' },
@@ -266,8 +278,18 @@ describe('POST /orgs/<slug>/activity/<number>', () => {
     const { number } = await log('spoke', 'Hi');
     const response = await edit(number, { outcome: 'note', note: '' });
     expect(response.statusCode).toBe(400);
+    // The problem shows in three places: the glass, the field (needed)
+    // and the key that fixes it (apps/crm/docs/002-rack.md, detail 6).
     expect(response.body).toContain(
-      '<p role="alert">Type a visit note, then tap Note only.</p>',
+      '<p role="alert" class="status"><span>Type a visit note, then tap Note only.</span></p>',
+    );
+    expect(response.body).toMatch(/<label class="field problem">/);
+    // The field keeps the text that the person typed: none.
+    expect(response.body).toContain(
+      '<textarea name="note" placeholder="What happened today?" aria-invalid="true" rows="2"></textarea>',
+    );
+    expect(response.body).toMatch(
+      /<button type="submit" class="key latch fix"[^>]*value="note"/,
     );
     expect(db.query('SELECT outcome FROM visit;').get()).toEqual({
       outcome: 'spoke',

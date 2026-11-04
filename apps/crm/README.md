@@ -75,8 +75,11 @@ billing. After sign-in, the seller has these pages:
   glass reads the record, the control unit holds the same form as its
   create page, filled in (REQ-CRM-FORM-001), and the plate keys are `Save`
   and `Cancel`. `/orgs/<slug>/activity/<number>`: the edit page of a visit
-  or a note, with the Log module filled in. Its LCD shows its `Type`:
-  `Note`, or `Visit, <outcome>`.
+  or a note, the same rack. The glass reads the organisation under the
+  number of the entry, when it was logged and its type (`Note`, or
+  `Visit, <outcome>`), and its text. The control unit holds the Log module,
+  filled in: each key saves again with its own type. `Save` on the plate
+  saves the text and keeps the type that is lit.
 
 - `/review`: Review, the evening view. The glass reads the day, the
   visits and the notes logged today, and the counts of Overdue and Due
@@ -289,7 +292,10 @@ A page that is not on the rack has the old parts in place of 3 and 4: the
 device (`device`, a `Device` with an `Lcd` and modules on a grid of 6) in
 the left column, and the help and the boxes (`help` and `boxes`, each box
 a `ui/Box`) in the right column, in a 40/60 grid. Each page moves to the
-rack in its own change (`docs/002-rack.md`, Order of work).
+rack in its own change (`docs/002-rack.md`, Order of work). Each page under
+`/orgs` is on the rack. The sign-in pages (`/login` and the pages under
+it) and the account pages (`/account` and the pages under it, and the 403
+page of an admin route) still have the old parts.
 
 The layout has one width breakpoint, 960px (REQ-CRM-LAYOUT-002, in
 `crm-fe/src/theme.css`):

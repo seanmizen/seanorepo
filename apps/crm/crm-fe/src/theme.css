@@ -783,6 +783,10 @@ button.link:disabled {
     padding-left: 0;
     border-left: 0;
   }
+  /* A strip of the name and one more reading: the reading has the row. */
+  .strip > .name + :last-child {
+    grid-column: 1 / -1;
+  }
   .strip .name > .value {
     font-size: 1.35em;
   }

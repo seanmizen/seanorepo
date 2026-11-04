@@ -823,7 +823,7 @@ describe('the page anatomy', () => {
     expect(mode.cookies).toEqual([]);
   });
 
-  test('no LCD holds a form control, a heading or help text, and only a menu has links', async () => {
+  test('no LCD or glass holds a form control, a heading or help text, and only a menu has links', async () => {
     const slug = await addFullOrg();
     const [, , activityEdit] = editPages((await get(`/orgs/${slug}`)).body);
     const pages = [
@@ -841,8 +841,10 @@ describe('the page anatomy', () => {
     htmls.push((await postForm(app, '/orgs/new', { name: ' ' }, cookie)).body);
     htmls.push((await postForm(app, '/login', {})).body);
     let lcds = 0;
-    for (const html of htmls) {
-      const lcd = divOf(html, 'lcd');
+    for (const lcd of htmls.flatMap((html) => [
+      divOf(html, 'lcd'),
+      divOf(html, 'glass'),
+    ])) {
       if (!lcd) continue;
       lcds += 1;
       expect(lcd).not.toMatch(/<(form|input|button|select|textarea|h1|h2)\b/);
