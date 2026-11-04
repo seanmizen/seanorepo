@@ -98,7 +98,11 @@ esac
 # does not answer.
 if ! ssh-keygen -y -P '' -f "$KEY" > /dev/null 2>&1; then
     key_fp="$(ssh-keygen -lf "$KEY" 2> /dev/null | awk '{ print $2 }')"
-    if [ -z "$key_fp" ] || ! ssh-add -l 2> /dev/null | grep -qF "$key_fp"; then
+    # Read the agent's list into a variable, then search it. A pipe into
+    # `grep -q` fails at random under pipefail: grep stops at the first match,
+    # and ssh-add, still writing, stops on SIGPIPE (status 141).
+    agent_keys="$(ssh-add -l 2> /dev/null || true)"
+    if [ -z "$key_fp" ] || ! grep -qF "$key_fp" <<< "$agent_keys"; then
         die "$KEY has a passphrase, and no ssh-agent holds it. provision.sh runs ssh in batch mode, which cannot ask for a passphrase. Load the key into an agent, then run provision.sh again:
     eval \"\$(ssh-agent -s)\"
     ssh-add $KEY"
