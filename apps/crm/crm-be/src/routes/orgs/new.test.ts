@@ -4,6 +4,8 @@ import type { buildApp } from '../../index';
 import {
   addOrg,
   addPerson,
+  bodyText,
+  divOf,
   orgEvents,
   postForm,
   signInAdmin,
@@ -44,7 +46,7 @@ const auditRows = () =>
     .all('sign_in');
 
 describe('GET /orgs/new', () => {
-  test('shows the organisation form, the contact form and one Save key', async () => {
+  test('is a rack: the glass of the new lead, Save lead on the plate, and Organisation, Address, First contact and First visit in the control unit', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/orgs/new',
@@ -52,7 +54,10 @@ describe('GET /orgs/new', () => {
     });
     expect(response.statusCode).toBe(200);
     const html = response.body;
-    expect(html).toContain('<form action="/orgs/new" method="post">');
+    expect(html).not.toContain('class="device');
+    expect(html).toContain(
+      '<form id="new-lead" action="/orgs/new" method="post">',
+    );
     for (const name of [
       'name',
       'source',
@@ -67,14 +72,50 @@ describe('GET /orgs/new', () => {
     ]) {
       expect(html).toContain(`name="${name}"`);
     }
-    const labels = [...html.matchAll(/<h2 class="label">([^<]+)<\/h2>/g)].map(
-      (match) => match[1],
-    );
-    expect(labels).toEqual(['Organisation', 'Address', 'First contact']);
-    expect(html.match(/<button type="submit" class="key">/g)).toEqual([
-      '<button type="submit" class="key">',
+    const modules = [
+      ...html.matchAll(
+        /<section class="module span-3"><h2 class="label">([^<]+)<\/h2>/g,
+      ),
+    ].map((match) => match[1]);
+    expect(modules).toEqual([
+      'Organisation',
+      'Address',
+      'First contact',
+      'First visit',
     ]);
+    // One key saves: Save lead, on the plate. It submits the form by its
+    // id.
+    expect(html).toContain(
+      '<button type="submit" class="key" id="save-lead" form="new-lead" aria-describedby="save-lead-caption">Save lead</button>',
+    );
+    expect(html.match(/<button type="submit" class="key/g)).toHaveLength(1);
+    // First visit: the note, then each Save as visit value as a choice,
+    // with None on.
+    expect(html).toContain(
+      '<label class="key latch"><input type="radio" name="visit_outcome" checked="" value=""/>None</label>',
+    );
+    expect(html).toContain('name="visit_note"');
+    // The glass reads what the save sets.
+    expect(bodyText(`<body>${divOf(html, 'glass')}`)).toBe(
+      'New lead No name No address Stage Lead Source None Lawful basis legitimate interests First contact None First visit None',
+    );
     expect(html).not.toContain('class="boxes"');
+  });
+
+  test('?name= starts the form with the search text in the name', async () => {
+    const html = (
+      await app.inject({
+        method: 'GET',
+        url: '/orgs/new?name=Corner%20Cafe',
+        headers: { cookie },
+      })
+    ).body;
+    expect(html).toContain(
+      '<input required="" name="name" value="Corner Cafe"/>',
+    );
+    expect(bodyText(`<body>${divOf(html, 'glass')}`)).toStartWith(
+      'New lead Corner Cafe',
+    );
   });
 });
 
@@ -139,6 +180,65 @@ describe('POST /orgs/new', () => {
     ]);
   });
 
+  test('Save lead saves the organisation and logs the first visit in one press', async () => {
+    const response = await postForm(
+      app,
+      '/orgs/new',
+      {
+        name: 'Corner Cafe',
+        contact_name: 'Sam',
+        visit_note: 'Owner keen',
+        visit_outcome: 'spoke',
+      },
+      cookie,
+    );
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/orgs/corner-cafe');
+    expect(db.query('SELECT number, outcome, note FROM visit;').all()).toEqual([
+      { number: 1, outcome: 'spoke', note: 'Owner keen' },
+    ]);
+    // Two events: the new lead, then the visit, so Undo can reverse the
+    // visit and keep the lead.
+    expect(orgEvents(db).map((event) => event.kind)).toEqual([
+      'create',
+      'visit',
+    ]);
+    // Note only saves a note. No choice and no note logs nothing.
+    await postForm(
+      app,
+      '/orgs/new',
+      { name: 'Note Shop', visit_note: 'Closed', visit_outcome: 'note' },
+      cookie,
+    );
+    expect(count('note')).toBe(1);
+    await addOrg(app, cookie, { name: 'Plain Shop', visit_outcome: '' });
+    expect(count('visit') + count('note')).toBe(2);
+  });
+
+  test('a first visit with a problem shows it in three places, and adds nothing', async () => {
+    const response = await postForm(
+      app,
+      '/orgs/new',
+      { name: 'Corner Cafe', visit_outcome: 'note', visit_note: '' },
+      cookie,
+    );
+    expect(response.statusCode).toBe(400);
+    const html = response.body;
+    expect(html).toContain(
+      '<p role="alert" class="status"><span>Type a visit note, then tap Note only.</span></p>',
+    );
+    expect(html).toContain(
+      '<span class="label">Visit note<strong class="problem-word"> · needed</strong></span>',
+    );
+    // The choice and the typed values stay.
+    expect(html).toContain('checked="" value="note"');
+    expect(html).toContain('name="name" value="Corner Cafe"');
+    expect(bodyText(`<body>${divOf(html, 'glass')}`)).toContain(
+      'First visit Note only',
+    );
+    expect(count('organisation')).toBe(0);
+  });
+
   test('links the person that has the email, and adds no person', async () => {
     const existing = addPerson(db, 'ann@example.com');
     const people = count('person');
@@ -201,7 +301,9 @@ describe('POST /orgs/new', () => {
         cookie,
       );
       expect(response.statusCode).toBe(400);
-      expect(response.body).toContain(`<p role="alert">${error}</p>`);
+      expect(response.body).toContain(
+        `<p role="alert" class="status"><span>${error}</span></p>`,
+      );
       expect(response.body).toContain(`value="${slug}"`);
     }
     expect(count('organisation')).toBe(1);
@@ -216,7 +318,7 @@ describe('POST /orgs/new', () => {
     );
     expect(response.statusCode).toBe(400);
     expect(response.body).toContain(
-      '<p role="alert">Type the name of the organisation.</p>',
+      '<p role="alert" class="status"><span>Type the name of the organisation.</span></p>',
     );
     expect(response.body).toContain('value="E1 6AN"');
     expect(response.body).toContain('name="contact_name" value="Ann"');

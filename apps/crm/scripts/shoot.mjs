@@ -379,8 +379,9 @@ try {
     ['home', '/'],
     ['home-page-2', '/?page=2'],
     ['home-search', '/?q=street&stage=visited'],
-    // /orgs is the same list as /.
-    ['orgs', '/orgs?sort=name&dir=asc'],
+    // /orgs is the address book: A to Z, grouped by the first letter.
+    ['orgs', '/orgs'],
+    ['orgs-added', '/orgs?sort=added&dir=desc'],
     // The pointer on the second row of the band.
     ['home-hover', '/', ['hover', '.chart tbody tr:nth-child(2) th a']],
     ['org', '/orgs/example-plumbing'],
@@ -394,6 +395,8 @@ try {
     ['contact-edit', '/orgs/example-plumbing/contacts/1'],
     ['activity-edit', '/orgs/example-plumbing/activity/2'],
     ['org-new', '/orgs/new'],
+    // New lead from a search with no match: the name is the search text.
+    ['org-new-name', '/orgs/new?name=Rose%20Bakery'],
     ['account', '/account'],
     ['passkeys', '/account/passkeys'],
     ['sessions', '/account/sessions'],
@@ -500,6 +503,7 @@ try {
     ['org', '/orgs/example-plumbing?theme=bare'],
     ['org-hidden-shown', '/orgs/riverside-dental?hidden=1&theme=bare'],
     ['org-new', '/orgs/new?theme=bare'],
+    ['orgs', '/orgs?theme=bare'],
   ]) {
     await shoot(page, name, url, 'bare');
   }

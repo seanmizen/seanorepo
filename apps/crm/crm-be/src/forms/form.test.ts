@@ -29,7 +29,9 @@ const attrsOf = (text: string) =>
 /**
  * Each control of a record form on a page: its signature, and its value.
  * A `keys` control is a fieldset of submit keys. Its value is the key with
- * the LED on.
+ * the LED on. A `keys` control that is a choice (the First visit module of
+ * /orgs/new) is a fieldset of radio buttons, with `None` (an empty value)
+ * after the options. Its value is the checked one.
  */
 const controlsOf = (html: string) => {
   const controls = new Map<string, { control: Control; value: string }>();
@@ -68,6 +70,23 @@ const controlsOf = (html: string) => {
     const keys = [...m[2].matchAll(/<button([^>]*)>/g)].map((b) =>
       attrsOf(b[1]),
     );
+    const radios = [...m[2].matchAll(/<input type="radio"([^>]*)\/>/g)].map(
+      (r) => attrsOf(r[1]),
+    );
+    if (radios.length > 0) {
+      expect(radios.at(-1)?.value).toBe('');
+      controls.set(radios[0].name, {
+        control: {
+          label: m[1],
+          tag: 'keys',
+          name: radios[0].name,
+          required: false,
+          options: radios.slice(0, -1).map((radio) => radio.value),
+        },
+        value: radios.find((radio) => 'checked' in radio)?.value ?? '',
+      });
+      continue;
+    }
     controls.set(keys[0].name, {
       control: {
         label: m[1],
@@ -192,7 +211,12 @@ describe('the record forms', () => {
       },
       {
         form: activityForm,
-        creates: [[orgPage, '']],
+        // The Log module of the organisation page, and the First visit
+        // module of /orgs/new.
+        creates: [
+          [orgPage, ''],
+          [newLead, 'visit_'],
+        ],
         edit: await page(`/orgs/${slug}/activity/1`),
         current: ['After 5pm', 'call_back'],
       },

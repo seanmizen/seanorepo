@@ -104,7 +104,9 @@ describe('GET / signed out', () => {
     for (const url of ['/', '/orgs']) {
       const page = await get(url, admin);
       expect(page.statusCode).toBe(200);
-      expect(page.body).toContain('<title>Organisations - crm</title>');
+      expect(page.body).toContain(
+        `<title>${url === '/' ? 'Organisations' : 'Address book'} - crm</title>`,
+      );
       expect(page.body).toContain('Acme Plumbing');
       expect(page.body).not.toContain(HOME_HEADING);
     }

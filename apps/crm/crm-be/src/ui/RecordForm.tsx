@@ -6,7 +6,7 @@ import type {
   RecordFormDef,
 } from '../forms/form';
 import { Field, ProblemWord } from './Field';
-import { Key, Keys } from './Key';
+import { Key, Keys, Sub } from './Key';
 import { LatchKey } from './LatchKey';
 import { Module, type Span } from './Module';
 
@@ -20,6 +20,11 @@ import { Module, type Span } from './Module';
  * the value of the key of a `keys` field that fixes the problem, for
  * example `note` (Note only) after "Type a visit note". `form` is the id
  * of the form of a control out of its `<form>`.
+ *
+ * With `choose`, a `keys` field is a choice in a bigger form, not a group
+ * of keys that save: each key is a radio button in a latching key, and a
+ * last key `None` (an empty value) is on by default. The key that saves
+ * is the key of the bigger form, for example Save lead.
  */
 const Control = ({
   field,
@@ -28,6 +33,7 @@ const Control = ({
   problem,
   fixKey,
   form,
+  choose = false,
 }: {
   field: FormField;
   name: string;
@@ -35,8 +41,38 @@ const Control = ({
   problem?: string;
   fixKey?: string;
   form?: string;
+  choose?: boolean;
 }) => {
   const options = field.options ?? {};
+  if (field.type === 'keys' && choose) {
+    const hints = field.hints ?? {};
+    const rows = field.rows ?? [Object.keys(options)];
+    const choices = [...rows.slice(0, -1), [...(rows.at(-1) ?? []), '']];
+    return (
+      <fieldset className={problem ? 'field problem' : 'field'}>
+        <legend className="label">
+          {field.label}
+          {problem && <ProblemWord word={problem} />}
+        </legend>
+        {choices.map((row) => (
+          <Keys key={row.join(' ')}>
+            {row.map((option) => (
+              <label key={option} className="key latch">
+                <input
+                  type="radio"
+                  name={name}
+                  value={option}
+                  defaultChecked={option === (value ?? '')}
+                />
+                {option ? options[option] : 'None'}
+                {hints[option] !== undefined && <Sub>{hints[option]}</Sub>}
+              </label>
+            ))}
+          </Keys>
+        ))}
+      </fieldset>
+    );
+  }
   if (field.type === 'keys') {
     const hints = field.hints ?? {};
     // A `<fieldset>`, not a `<label>`: a tap on a label taps its first key.
@@ -133,6 +169,8 @@ const Control = ({
  * - `problem` is the field with the problem of the last post, from
  *   `parseForm`: its label says the word, and the theme gives it a thick
  *   outline. `fixKey` is the value of the key that fixes it (`Control`).
+ * - `choose` makes each `keys` field a choice of radio buttons, with
+ *   `None` (`Control`): the First visit module of `/orgs/new`.
  */
 export const RecordForm = ({
   form,
@@ -143,6 +181,7 @@ export const RecordForm = ({
   span,
   problem,
   fixKey,
+  choose,
   children,
 }: {
   form: RecordFormDef;
@@ -153,6 +192,7 @@ export const RecordForm = ({
   span?: Span;
   problem?: FieldProblem;
   fixKey?: string;
+  choose?: boolean;
   children?: ReactNode;
 }) => (
   <>
@@ -171,6 +211,7 @@ export const RecordForm = ({
             value={values[field.name]}
             problem={problem?.field === field.name ? problem.word : undefined}
             fixKey={fixKey}
+            choose={choose}
           />
         ))}
         {i === form.modules.length - 1 && children}

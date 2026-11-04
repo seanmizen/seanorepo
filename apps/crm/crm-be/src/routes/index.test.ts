@@ -119,6 +119,14 @@ const names = async (url: string) => {
   ].map((m) => m[1]);
 };
 
+/** The gutter of the band: the name and the count of each group. */
+const gutterOf = (html: string) =>
+  [
+    ...html.matchAll(
+      /<span class="group">([^<]+)<\/span> <span class="count">(\d+)<\/span>/g,
+    ),
+  ].map((m) => `${m[1]} ${m[2]}`);
+
 /** The band of a page: its `<section>`. */
 const bandOf = (html: string) => {
   const start = html.indexOf('<section class="band"');
@@ -420,8 +428,8 @@ describe('GET / and GET /orgs', () => {
     );
   });
 
-  test('a sort key sorts ascending, then descending, then removes the sort, and a different key replaces the sort', () => {
-    const none = { sort: '', dir: 'asc' } as const;
+  test('a sort key sorts ascending, then descending, then sets the default sort of the page, and a different key replaces the sort', () => {
+    const none = { sort: 'due', dir: 'asc' } as const;
     expect(nextSort(none, 'name')).toEqual({ sort: 'name', dir: 'asc' });
     expect(nextSort({ sort: 'name', dir: 'asc' }, 'name')).toEqual({
       sort: 'name',
@@ -432,9 +440,14 @@ describe('GET / and GET /orgs', () => {
       sort: 'added',
       dir: 'asc',
     });
-    // The Due key sets the default order.
-    expect(nextSort({ sort: 'added', dir: 'asc' }, '')).toEqual(none);
-    expect(nextSort(none, '')).toEqual(none);
+    // The Due key sets Due.
+    expect(nextSort({ sort: 'added', dir: 'asc' }, 'due')).toEqual(none);
+    expect(nextSort(none, 'due')).toEqual(none);
+    // In the address book, the default sort is Name, A to Z.
+    expect(nextSort({ sort: 'name', dir: 'desc' }, 'name', 'name')).toEqual({
+      sort: 'name',
+      dir: 'asc',
+    });
   });
 
   test('each sort key is a GET form that keeps the search and the stage, with plain state text and an LED green for ascending and red for descending', async () => {
@@ -600,14 +613,14 @@ describe('GET / and GET /orgs', () => {
     );
   });
 
-  test('/ and /orgs show the same list, and the forms of each submit to its own path', async () => {
+  test('/ is the Plan and /orgs is the address book, and the forms of each submit to its own path', async () => {
     await addThree();
-    expect(await names('/orgs?sort=name&dir=desc')).toEqual(
-      await names('/?sort=name&dir=desc'),
-    );
+    await addOrg(app, cookie, { name: '4 Seasons' });
     for (const path of LIST_PATHS) {
       const html = (await get(`${path}?sort=name&dir=asc&q=a`)).body;
-      expect(html).toContain('<title>Organisations - crm</title>');
+      expect(html).toContain(
+        `<title>${path === '/' ? 'Organisations' : 'Address book'} - crm</title>`,
+      );
       const actions = [
         ...html.matchAll(/<form action="([^"]+)" method="get">/g),
       ]
@@ -618,6 +631,63 @@ describe('GET / and GET /orgs', () => {
     }
     expect((await get('/orgs')).body).toContain(
       '<h1 id="top" class="title"><a href="/">crm</a><span class="path"> / <span class="here" aria-current="page">orgs</span></span></h1>',
+    );
+    // The Plan is grouped by due date. The address book is A to Z by
+    // default, grouped by the first letter in the gutter.
+    expect(gutterOf((await get('/')).body)).toEqual(['None 4']);
+    const book = (await get('/orgs')).body;
+    expect(gutterOf(book)).toEqual(['# 1', 'A 1', 'B 1', 'C 1']);
+    expect(await names('/orgs')).toEqual([
+      '4 Seasons',
+      'Alpha',
+      'Bravo',
+      'Charlie',
+    ]);
+    expect(bodyText(book)).toContain(
+      'Organisations A to Z Sorted by name, A to Z',
+    );
+    expect(book).toContain('<th scope="col" class="c-gutter">Letter</th>');
+    // The sort keys of the address book: Name is on, and its next press
+    // sorts Z to A. The groups follow the order.
+    expect(book).toContain(
+      '<form action="/orgs" method="get"><input type="hidden" name="sort" value="name"/><input type="hidden" name="dir" value="desc"/><button type="submit" class="key latch" aria-pressed="true" data-direction="asc">Name',
+    );
+    expect(gutterOf((await get('/orgs?sort=name&dir=desc')).body)).toEqual([
+      'C 1',
+      'B 1',
+      'A 1',
+      '# 1',
+    ]);
+    // Date added groups by the month added. Due groups by due date.
+    expect(gutterOf((await get('/orgs?sort=added&dir=asc')).body)).toEqual([
+      '2026-Jan 1',
+      '2026-Feb 1',
+      '2026-Mar 1',
+      expect.stringMatching(/^\d{4}-[A-Z][a-z]{2} 1$/),
+    ]);
+    expect(gutterOf((await get('/orgs?sort=due')).body)).toEqual(['None 4']);
+    // The stage keys and the search filter the address book too.
+    expect(await names('/orgs?q=br')).toEqual(['Bravo']);
+    expect(await names('/orgs?stage=quoted')).toEqual([]);
+  });
+
+  test('a search with no match offers New lead, with the search text', async () => {
+    await addThree();
+    const html = (await get('/?q=Corner%20Cafe')).body;
+    expect(html).toContain(
+      '<td colSpan="8" class="empty">No organisation matches “Corner Cafe”. <a href="/orgs/new?name=Corner+Cafe">New lead: Corner Cafe</a></td>',
+    );
+    // The New lead key carries the search text, and it is the key that
+    // the page offers (a thick outline).
+    expect(html).toContain(
+      '<a class="key fix" href="/orgs/new?name=Corner+Cafe">New lead</a>',
+    );
+    expect((await get('/?q=al')).body).toContain(
+      '<a class="key" href="/orgs/new?name=al">New lead</a>',
+    );
+    // The new lead form starts with the search text in the name.
+    expect((await get('/orgs/new?name=Corner+Cafe')).body).toContain(
+      'name="name" value="Corner Cafe"/>',
     );
   });
 });
@@ -720,8 +790,13 @@ describe('the page anatomy', () => {
         html.indexOf('<nav class="links"'),
         html.indexOf('</nav>'),
       );
-      expect(nav).toContain('<span aria-current="page">orgs</span>');
-      expect(nav).not.toContain('<a href="/orgs">');
+      // orgs is the address book. It is not the home, so the home links it.
+      if (path === '/orgs') {
+        expect(nav).toContain('<span aria-current="page">orgs</span>');
+        expect(nav).not.toContain('<a href="/orgs">');
+      } else {
+        expect(nav).toContain('<a href="/orgs">orgs</a>');
+      }
       expect(nav).toContain('<a href="/orgs/new">new lead</a>');
       expect(nav).toContain('<a href="/account">account</a>');
       expect(nav).toContain(
@@ -773,7 +848,7 @@ describe('the page anatomy', () => {
         '<a ',
       );
     }
-    expect(lcds).toBeGreaterThanOrEqual(4);
+    expect(lcds).toBeGreaterThanOrEqual(3);
   });
 });
 

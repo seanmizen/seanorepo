@@ -1,6 +1,13 @@
 import type { Database } from 'bun:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { addDays, dueWords, fullDateTime, isoDateTime, today } from '../dates';
+import {
+  addDays,
+  dueWords,
+  formatDate,
+  fullDateTime,
+  isoDateTime,
+  today,
+} from '../dates';
 import {
   formText,
   isStage,
@@ -15,16 +22,16 @@ import { BareText } from '../ui/BareText';
 import { Box } from '../ui/Box';
 import { ControlUnit } from '../ui/ControlUnit';
 import { DisplayUnit, type PlateKey } from '../ui/DisplayUnit';
-import { Key, Keys } from '../ui/Key';
+import { Key, Keys, keyClass } from '../ui/Key';
 import { LatchKey } from '../ui/LatchKey';
 import { Module } from '../ui/Module';
 import { Rack } from '../ui/Rack';
 import { When } from '../ui/When';
 
 /**
- * The sort keys of the list, after `Due` (the default order): the text on
- * each key, and the text of each direction. The legends of the band use
- * the same words. The sorts are due, date added and name, and no other
+ * The sort keys of the list that have a direction: the text on each key,
+ * and the text of each direction. The legends of the band use the same
+ * words. With `Due`, the sorts are due, date added and name, and no other
  * (`apps/crm/docs/002-rack.md`, decision 3).
  */
 export const SORTS = {
@@ -40,7 +47,11 @@ export const SORTS = {
   },
 } as const;
 
-export type Sort = keyof typeof SORTS;
+/**
+ * A sort of the list. `due` is the Due key: the oldest due date first, with
+ * no direction. `added` and `name` have a direction.
+ */
+export type Sort = 'due' | keyof typeof SORTS;
 
 export type Direction = 'asc' | 'desc';
 
@@ -52,15 +63,30 @@ export type Direction = 'asc' | 'desc';
 const lower = (text: string) =>
   text.replace(/\b[A-Z](?=[a-z])/g, (letter) => letter.toLowerCase());
 
-const isSort = (value: string): value is Sort => Object.hasOwn(SORTS, value);
+const isSort = (value: string): value is Sort =>
+  value === 'due' || Object.hasOwn(SORTS, value);
 
 /** The number of rows on one page of the list. */
 export const PAGE_SIZE = 50;
 
-/** The two paths of the list. One handler serves both. */
+/**
+ * The two pages of the list. One handler serves both.
+ *
+ * - `/` is the Plan, the home: the band is grouped by due date, and the
+ *   default sort is Due (`apps/crm/docs/002-rack.md`, decision 1).
+ * - `/orgs` is the address book: the band is grouped by the sort (the
+ *   first letter of the name, the month added, or the due date), and the
+ *   default sort is Name, A to Z (Timeline, /orgs).
+ */
 export const LIST_PATHS = ['/', '/orgs'] as const;
 
 export type ListPath = (typeof LIST_PATHS)[number];
+
+/** The sort of each page of the list when its URL has none. */
+export const DEFAULT_SORT: Record<ListPath, Sort> = {
+  '/': 'due',
+  '/orgs': 'name',
+};
 
 /**
  * The groups of the Plan, in order: each organisation is in one group, by
@@ -89,64 +115,100 @@ const DUE_GROUP = `CASE
   END`;
 
 /**
+ * The group of each organisation in SQL, for each grouping of the band:
+ * the due group, the first letter of the name (`#` for a name that does
+ * not start with a letter), or the month added (`YYYY-MM`).
+ */
+const GROUPS: Record<Sort, string> = {
+  due: DUE_GROUP,
+  name: `CASE WHEN upper(substr(name, 1, 1)) BETWEEN 'A' AND 'Z'
+    THEN upper(substr(name, 1, 1)) ELSE '#' END`,
+  added: 'substr(created_at, 1, 7)',
+};
+
+/**
+ * The grouping of the band of `path` with the sort `sort`. The Plan is
+ * always grouped by due date. The address book is grouped by its sort.
+ */
+const groupingOf = (path: ListPath, sort: Sort): Sort =>
+  path === '/' ? 'due' : sort;
+
+/**
  * The state of the list. The URL holds all of it:
- * `?q=<text>&stage=<stage>&sort=<sort>&dir=<asc|desc>&page=<n>`. An empty
- * `sort` is the default order: due first.
+ * `?q=<text>&stage=<stage>&sort=<sort>&dir=<asc|desc>&page=<n>`. A URL
+ * with no sort has the default sort of its page (`DEFAULT_SORT`).
  */
 export interface ListQuery {
   q: string;
   stage: Stage | '';
-  sort: Sort | '';
+  sort: Sort;
   dir: Direction;
   page: number;
 }
 
 /**
- * Read the state of the list from its URL. A value that is not valid gives
- * the default: no search, all stages, the default order, page 1.
+ * Read the state of the list at `path` from its URL. A value that is not
+ * valid gives the default: no search, all stages, the default sort of the
+ * page, page 1. Due has no direction.
  */
-export const parseListQuery = (query: unknown): ListQuery => {
+export const parseListQuery = (
+  query: unknown,
+  path: ListPath = '/',
+): ListQuery => {
   const params = (query ?? {}) as Record<string, unknown>;
   const stage = formText(params.stage);
-  const sort = formText(params.sort);
+  const sortText = formText(params.sort);
+  const sort = isSort(sortText) ? sortText : DEFAULT_SORT[path];
   const page = Number(formText(params.page));
   return {
     q: formText(params.q),
     stage: isStage(stage) ? stage : '',
-    sort: isSort(sort) ? sort : '',
-    dir: formText(params.dir) === 'desc' ? 'desc' : 'asc',
+    sort,
+    dir: sort !== 'due' && formText(params.dir) === 'desc' ? 'desc' : 'asc',
     page: Number.isInteger(page) && page > 1 ? page : 1,
   };
 };
+
+/**
+ * The `sort` and `dir` fields of the URL of a sort at `path`. The default
+ * sort of the page, ascending, has none, and Due has no `dir`.
+ */
+const sortFields = (
+  path: ListPath,
+  { sort, dir }: Pick<ListQuery, 'sort' | 'dir'>,
+) =>
+  sort === DEFAULT_SORT[path] && dir === 'asc'
+    ? { sort: '', dir: '' }
+    : { sort, dir: sort === 'due' ? '' : dir };
 
 /** The URL of the list at `path` with `state`. It has no empty parameter. */
 export const listHref = (path: ListPath, state: ListQuery) => {
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.stage) params.set('stage', state.stage);
-  if (state.sort) {
-    params.set('sort', state.sort);
-    params.set('dir', state.dir);
-  }
+  const { sort, dir } = sortFields(path, state);
+  if (sort) params.set('sort', sort);
+  if (dir) params.set('dir', dir);
   if (state.page > 1) params.set('page', String(state.page));
   const search = params.toString();
   return search ? `${path}?${search}` : path;
 };
 
 /**
- * The sort after a press on the key `key`. `''` is the Due key: it sets the
- * default order. The first press on Date added or Name sorts ascending, the
- * second press descending, and the third press sets the default order. A
- * press on a different key replaces the sort.
+ * The sort after a press on the key `key`. The Due key sets Due. The first
+ * press on Date added or Name sorts ascending, the second press
+ * descending, and the third press sets `fallback`: the default sort of the
+ * page. A press on a different key replaces the sort.
  */
 export const nextSort = (
   { sort, dir }: Pick<ListQuery, 'sort' | 'dir'>,
-  key: Sort | '',
+  key: Sort,
+  fallback: Sort = 'due',
 ): Pick<ListQuery, 'sort' | 'dir'> => {
-  if (key === '') return { sort: '', dir: 'asc' };
+  if (key === 'due') return { sort: 'due', dir: 'asc' };
   if (sort !== key) return { sort: key, dir: 'asc' };
   if (dir === 'asc') return { sort: key, dir: 'desc' };
-  return { sort: '', dir: 'asc' };
+  return { sort: fallback, dir: 'asc' };
 };
 
 /**
@@ -178,7 +240,18 @@ export type ListRow = Pick<
   last_activity: string;
   /** The index of the group of the row in `DUE_GROUPS`. */
   due_group: number;
+  /** The key of the group of the row in the band (`GROUPS`). */
+  grp: number | string;
 };
+
+/** One group of the band: its key in SQL, its name and its count. */
+export interface ListGroup {
+  key: number | string;
+  name: string;
+  count: number;
+  /** True when the group covers more than one day (`DUE_GROUPS`). */
+  days: boolean;
+}
 
 /**
  * The date of a next action as a band cell: the date and its status in
@@ -204,9 +277,27 @@ const DueCell = ({ date, days }: { date: string | null; days: boolean }) => {
   );
 };
 
+/** The URL of the new lead page, with the search text as its name. */
+export const newLeadHref = (q: string) =>
+  q ? `/orgs/new?${new URLSearchParams({ name: q })}` : '/orgs/new';
+
+/** The text of the sort of the band, under its head. */
+const orderText = (path: ListPath, { sort, dir }: ListQuery) => {
+  if (sort === 'due') return 'Sorted by due date, oldest first';
+  const text = `sorted by ${lower(SORTS[sort].text)}, ${lower(SORTS[sort][dir])}`;
+  return path === '/' ? `In each group, ${text}` : `S${text.slice(1)}`;
+};
+
+/** The legend of the gutter of the band, for each grouping. */
+const GUTTERS: Record<Sort, string> = {
+  due: 'Due',
+  name: 'Letter',
+  added: 'Added',
+};
+
 /**
- * The home: the Plan (`apps/crm/docs/002-rack.md`, decision 1), at `/` and
- * at `/orgs`. The page is a rack over a band (REQ-CRM-LAYOUT-002).
+ * The list, at `/` (the Plan, the home) and at `/orgs` (the address book).
+ * The page is a rack over a band (REQ-CRM-LAYOUT-002).
  *
  * - The display unit. The glass reads the first organisation of the list
  *   (its name, its next action and its due date), the counts of Overdue
@@ -217,17 +308,22 @@ const DueCell = ({ date, days }: { date: string | null; days: boolean }) => {
  * - The control unit. Search (with New lead), Stage and Sort, side by side.
  *   Search and Stage are one GET form. The Search key sends the stage that
  *   is lit, so the Enter key in the field keeps it. Each stage key sends
- *   its own stage. Sort has three latching keys: Due (the default order),
- *   Date added and Name. Date added and Name sort ascending (green LED),
- *   then descending (red LED), then go back to Due.
- * - The band. Each organisation is one row, in a group of `DUE_GROUPS`:
- *   Overdue, Today, Next 7 days, Later, None. The sort sets the order in
- *   each group. Due puts the oldest due date first, then the newest last
- *   activity. The LED of a row, on the chassis seam, is lit when the next
- *   action is due today or overdue. Overdue shows three times: the LED, the
- *   group name and the words, for example "3 days overdue". With the Date
- *   added sort, the last column is the date added in place of the last
- *   activity, so the band shows the value that it is in order of.
+ *   its own stage. Sort has three latching keys: Due, Date added and Name.
+ *   Date added and Name sort ascending (green LED), then descending (red
+ *   LED), then go back to the default sort of the page. New lead carries
+ *   the search text, and a search with no match offers it in the band too.
+ * - The band. Each organisation is one row, with an LED on the chassis
+ *   seam that is lit when the next action is due today or overdue.
+ *   - On the Plan the groups are `DUE_GROUPS`: Overdue, Today, Next 7 days,
+ *     Later, None. The sort sets the order in each group. Due puts the
+ *     oldest due date first, then the newest last activity. Overdue shows
+ *     three times: the LED, the group name and the words, for example
+ *     "3 days overdue".
+ *   - In the address book the sort sets the groups: the first letter of
+ *     the name (the default, A to Z), the month added, or `DUE_GROUPS`.
+ *   With the Date added sort, the last column is the date added in place
+ *   of the last activity, so the band shows the value that it is in order
+ *   of.
  *
  * Each key is a GET submit or a link to `path`, so the URL holds the
  * search, the stage, the sort and the page, and each key works with no page
@@ -244,6 +340,7 @@ export const listPage = ({
   rows,
   total,
   counts,
+  groups: listGroups,
 }: {
   path: ListPath;
   date: string;
@@ -252,19 +349,20 @@ export const listPage = ({
   total: number;
   /** The number of organisations in each group of `DUE_GROUPS`. */
   counts: number[];
+  /** The groups of the band, in order (`listOrgs`). */
+  groups: ListGroup[];
 }): PageParts => {
   const { q, stage, sort, dir, page } = query;
+  const grouping = groupingOf(path, sort);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const firstRow = (page - 1) * PAGE_SIZE + 1;
   const first = rows[0];
-  const order = sort
-    ? `In each group, sorted by ${lower(SORTS[sort].text)}, ${lower(SORTS[sort][dir])}`
-    : 'Sorted by due date, oldest first';
-  const groups: BandGroup[] = DUE_GROUPS.map((group, index) => ({
+  const noMatch = total === 0 && q !== '' && stage === '';
+  const groups: BandGroup[] = listGroups.map((group) => ({
     name: group.name,
-    count: counts[index] ?? 0,
+    count: group.count,
     rows: rows
-      .filter((row) => row.due_group === index)
+      .filter((row) => row.grp === group.key)
       .map((row) => ({
         href: orgPath(row.slug),
         name: row.name,
@@ -311,8 +409,9 @@ export const listPage = ({
         }
       : { id: 'page-next', label: 'Next', caption: 'Last page', off: true },
   ];
+  const { sort: sortField, dir: dirField } = sortFields(path, query);
   return {
-    title: 'Organisations',
+    title: path === '/' ? 'Organisations' : 'Address book',
     rack: (
       <Rack>
         <DisplayUnit
@@ -366,7 +465,7 @@ export const listPage = ({
                   />
                 </label>
                 <span id="search-send" className="send">
-                  <Hidden fields={{ sort, dir: sort ? dir : '' }} />
+                  <Hidden fields={{ sort: sortField, dir: dirField }} />
                   <Key
                     name={stage ? 'stage' : undefined}
                     value={stage || undefined}
@@ -375,7 +474,7 @@ export const listPage = ({
                   </Key>
                 </span>
               </div>
-              <a className="key" href="/orgs/new">
+              <a className={keyClass(noMatch)} href={newLeadHref(q)}>
                 New lead
               </a>
             </Module>
@@ -405,10 +504,10 @@ export const listPage = ({
           <Module
             id="sort"
             label="Sort"
-            value={sort ? SORTS[sort][dir] : 'Due first'}
+            value={sort === 'due' ? 'Due first' : SORTS[sort][dir]}
             span={3}
           >
-            <SortKeys path={path} query={query} keys={['', 'added']} />
+            <SortKeys path={path} query={query} keys={['due', 'added']} />
             <SortKeys path={path} query={query} keys={['name']} />
           </Module>
         </ControlUnit>
@@ -417,9 +516,9 @@ export const listPage = ({
     band: (
       <Band
         id="orgs-band"
-        title="Organisations"
-        info={order}
-        gutter="Due"
+        title={path === '/' ? 'Organisations' : 'Organisations A to Z'}
+        info={orderText(path, query)}
+        gutter={GUTTERS[grouping]}
         seam="Due now"
         nameLabel="Organisation"
         orderName={sort === 'name' ? dir : undefined}
@@ -429,7 +528,7 @@ export const listPage = ({
           {
             label: 'Due date',
             name: 'c-due',
-            order: sort ? undefined : 'asc',
+            order: sort === 'due' ? 'asc' : undefined,
           },
           sort === 'added'
             ? { label: SORTS.added.text, name: 'c-last', order: dir }
@@ -438,7 +537,16 @@ export const listPage = ({
         ]}
         groups={groups}
         empty={
-          q || stage ? 'No organisation matches.' : 'No organisations yet.'
+          noMatch ? (
+            <>
+              No organisation matches “{q}”.{' '}
+              <a href={newLeadHref(q)}>New lead: {q}</a>
+            </>
+          ) : q || stage ? (
+            'No organisation matches.'
+          ) : (
+            'No organisations yet.'
+          )
         }
       />
     ),
@@ -447,9 +555,9 @@ export const listPage = ({
 
 /**
  * One row of sort keys. Each key is a GET form that keeps the search and
- * the stage, and sends the sort of the next press. `''` is the Due key. The
- * keys are two rows, so each label fits its key at the breakpoint: Due and
- * Date added, then Name.
+ * the stage, and sends the sort of the next press. The keys are two rows,
+ * so each label fits its key at the breakpoint: Due and Date added, then
+ * Name.
  */
 const SortKeys = ({
   path,
@@ -458,23 +566,22 @@ const SortKeys = ({
 }: {
   path: ListPath;
   query: ListQuery;
-  keys: (Sort | '')[];
+  keys: Sort[];
 }) => (
   <Keys>
     {keys.map((key) => {
-      const next = nextSort(query, key);
+      const next = nextSort(query, key, DEFAULT_SORT[path]);
       const on = query.sort === key;
       return (
-        <form key={key || 'due'} method="get" action={path}>
+        <form key={key} method="get" action={path}>
           <Hidden
             fields={{
               q: query.q,
               stage: query.stage,
-              sort: next.sort,
-              dir: next.sort ? next.dir : '',
+              ...sortFields(path, next),
             }}
           />
-          {key === '' ? (
+          {key === 'due' ? (
             <LatchKey on={on}>Due</LatchKey>
           ) : (
             <LatchKey
@@ -504,22 +611,37 @@ const WHERE = `WHERE ($q = '' OR name LIKE $name ESCAPE '\\'
     AND ($stage = '' OR stage = $stage)`;
 
 /**
- * The order in each group of `DUE_GROUPS`, for each sort. Due puts the
- * oldest due date first, then the newest last activity.
+ * The order in each group, for each sort. Due puts the oldest due date
+ * first, then the newest last activity.
  */
-const ORDER: Record<Sort | '', string> = {
-  '': 'next_action_on, last_activity DESC',
+const ORDER: Record<Sort, string> = {
+  due: 'next_action_on, last_activity DESC',
   added: 'created_at',
   name: 'name COLLATE NOCASE',
 };
 
+/** The name of a group of the band, from its key. */
+const groupName = (grouping: Sort, key: number | string) => {
+  if (grouping === 'due') return DUE_GROUPS[Number(key)]?.name ?? 'None';
+  if (grouping === 'added') {
+    return formatDate(`${key}-01`, { time: false }).slice(0, 8);
+  }
+  return String(key);
+};
+
 /**
- * One page of the organisations that match `query`, in its order, the
- * count of all the organisations that match, and the count of each group
- * of `DUE_GROUPS`. The rows come group by group. A page after the last
- * page gives the last page.
+ * One page of the organisations that match `query` on the page `path`, in
+ * its order, the count of all the organisations that match, the count of
+ * each group of `DUE_GROUPS`, and the groups of the band (`groupingOf`),
+ * each with its count. The rows come group by group. A page after the
+ * last page gives the last page.
  */
-export const listOrgs = (db: Database, query: ListQuery, date: string) => {
+export const listOrgs = (
+  db: Database,
+  query: ListQuery,
+  date: string,
+  path: ListPath = '/',
+) => {
   const filter = {
     q: query.q,
     name: `%${likeText(query.q)}%`,
@@ -537,12 +659,40 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
     counts[row.due_group] = row.n;
   }
   const total = counts.reduce((sum, n) => sum + n, 0);
+  const grouping = groupingOf(path, query.sort);
+  const descending = query.sort !== 'due' && query.dir === 'desc';
+  // The groups of a letter or a month are in the order of the sort too.
+  const groupDirection = grouping !== 'due' && descending ? ' DESC' : '';
+  const groups: ListGroup[] =
+    grouping === 'due'
+      ? DUE_GROUPS.map((group, index) => ({
+          key: index,
+          name: group.name,
+          count: counts[index] ?? 0,
+          days: group.days,
+        }))
+      : db
+          .query<
+            { grp: string; n: number },
+            Pick<typeof filter, 'q' | 'name' | 'postcode' | 'stage'>
+          >(
+            `SELECT ${GROUPS[grouping]} AS grp, count(*) AS n
+             FROM organisation ${WHERE}
+             GROUP BY grp ORDER BY grp${groupDirection};`,
+          )
+          .all(filter)
+          .map((row) => ({
+            key: row.grp,
+            name: groupName(grouping, row.grp),
+            count: row.n,
+            days: true,
+          }));
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
-  const direction = query.sort && query.dir === 'desc' ? ' DESC' : '';
+  const direction = descending ? ' DESC' : '';
   const rows = db
     .query<ListRow, typeof filter & typeof days & { offset: number }>(
       `SELECT slug, name, stage, next_action, next_action_on, postcode,
-         created_at, ${DUE_GROUP} AS due_group,
+         created_at, ${DUE_GROUP} AS due_group, ${GROUPS[grouping]} AS grp,
          max(
            created_at,
            coalesce((SELECT max(at) FROM visit
@@ -553,12 +703,12 @@ export const listOrgs = (db: Database, query: ListQuery, date: string) => {
                        AND note.hidden_at IS NULL), '')
          ) AS last_activity
        FROM organisation ${WHERE}
-       ORDER BY due_group, ${ORDER[query.sort]}${direction},
+       ORDER BY grp${groupDirection}, ${ORDER[query.sort]}${direction},
          name COLLATE NOCASE, slug
        LIMIT ${PAGE_SIZE} OFFSET $offset;`,
     )
     .all({ ...filter, ...days, offset: (page - 1) * PAGE_SIZE });
-  return { rows, total, page, counts };
+  return { rows, total, page, counts, groups };
 };
 
 /** The heading of the public home. */
@@ -585,7 +735,7 @@ export const homePage = (): PageParts => ({
 });
 
 /**
- * `GET /` and `GET /orgs`, with
+ * `GET /` (the Plan) and `GET /orgs` (the address book), with
  * `?q=<text>&stage=<stage>&sort=<sort>&dir=<asc|desc>&page=<n>`. One
  * handler serves both paths, and the forms of each page submit to its own
  * path.
@@ -603,8 +753,13 @@ export const listRoute = (app: FastifyInstance, db: Database) => {
           .send(renderPage(request, homePage()));
       }
       const date = today();
-      const query = parseListQuery(request.query);
-      const { rows, total, page, counts } = listOrgs(db, query, date);
+      const query = parseListQuery(request.query, path);
+      const { rows, total, page, counts, groups } = listOrgs(
+        db,
+        query,
+        date,
+        path,
+      );
       return reply.type('text/html; charset=utf-8').send(
         renderPage(
           request,
@@ -615,6 +770,7 @@ export const listRoute = (app: FastifyInstance, db: Database) => {
             rows,
             total,
             counts,
+            groups,
           }),
         ),
       );
