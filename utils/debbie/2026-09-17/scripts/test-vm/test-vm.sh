@@ -560,7 +560,10 @@ do_assert() {
     # reads the port number as a local filename and exits 255, which is not
     # one of this script's documented codes. So the two arrays come from a
     # common base, and are not the same array.
-    local common_opts=(-i "$KEY"
+    # IdentitiesOnly: ssh offers only $KEY. Without it, ssh offers each key in
+    # the ssh-agent first. With five or more agent keys, sshd stops the
+    # connection ("Too many authentication failures") before ssh offers $KEY.
+    local common_opts=(-i "$KEY" -o IdentitiesOnly=yes
         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
         -o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes)
     local ssh_opts=(-p "$SSH_PORT" "${common_opts[@]}")
