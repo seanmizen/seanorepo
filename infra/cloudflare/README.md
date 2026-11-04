@@ -7,56 +7,52 @@ checkout share. A push to `release` applies the stack in CI
 (`.github/workflows/infra-apply.yml`). One import block for each resource
 rebuilds a lost state (see "The state").
 
-## Setup (once per machine)
+## The token
 
-1. Create an API token in the Cloudflare dashboard: *My Profile → API
-   Tokens → Create Token → Create Custom Token*. Give it these
-   permissions:
+CI applies the stack with one Cloudflare token, `ci-infra-apply`. It is a
+secret of the GitHub environment `release`, and only the `release` branch
+can use that environment (`infra/github/main.tf`). A PR gets no token, and
+no machine keeps one.
 
-   | Scope   | Permission                 | Access |
-   | ------- | -------------------------- | ------ |
-   | Account | Cloudflare Tunnel          | Edit   |
-   | Account | Account Settings           | Read   |
-   | Zone    | Zone                       | Read   |
-   | Zone    | DNS                        | Edit   |
-   | Zone    | Zone Settings              | Edit   |
-   | Account | Workers R2 Storage         | Edit   |
+To make the token again (*Manage Account → Account API tokens → Create a
+token → Start from scratch*), add two policies:
 
-   Under *Zone Resources*, include only seanmizen.com, carolinemizen.art
-   and seansconverter.com.
+| Policy scope | Permission | Access |
+| ------------ | ---------- | ------ |
+| Entire Account | Argo Tunnel (Legacy). The summary calls it "Cloudflare Tunnel". | Edit |
+| Entire Account | Account Settings | Read |
+| Entire Account | Workers R2 Storage | Edit |
+| Specified Domains: seanmizen.com, carolinemizen.art, seansconverter.com, handymanplumbersw18.com | Zone | Read |
+| Same domains | DNS | Edit |
+| Same domains | Zone Settings | Edit |
 
-   CI uses the same token. Put it in the repo secret
-   `CLOUDFLARE_API_TOKEN`:
+Set no expiry. Then put the token in the environment:
 
-   ```bash
-   . ~/.config/seanorepo/cloudflare.secrets
-   printf %s "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN --repo seanmizen/seanorepo
-   ```
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --env release --repo seanmizen/seanorepo
+```
 
-2. Put the token in `~/.config/seanorepo/cloudflare.secrets`:
+Workers R2 Storage is account-wide, because OpenTofu manages the buckets
+and holds its state in R2. So this token can read the crm backups. That
+is why only `release` gets it.
 
-   ```bash
-   mkdir -p ~/.config/seanorepo
-   cp .secrets.example ~/.config/seanorepo/cloudflare.secrets
-   chmod 600 ~/.config/seanorepo/cloudflare.secrets
-   # then edit the file
-   ```
+## Apply by hand
 
-   The file is outside the repo, so git cannot commit it, and every
-   checkout and worktree uses it. `CLOUDFLARE_SECRETS=<path>` picks
-   another file.
+Normally you do not. If CI cannot apply:
 
-3. Make a checkout of `release` for apply, once. `yarn release` pushes
-   to `origin/release` and does not change this checkout, so pull it
-   before each apply:
+1. Make a token as above, with a short expiry.
+2. Put it in `~/.config/seanorepo/cloudflare.secrets` (see
+   `.secrets.example`, mode 600).
+3. Make a checkout of `release`, once. `yarn release` pushes to
+   `origin/release` and does not change this checkout, so pull it before
+   each apply:
 
    ```bash
    git worktree add ~/projects/seanorepo-release release
    ```
 
-4. Run `./tofu init`. It makes the R2 bucket if it does not exist. A
-   checkout that used the old local state needs `./tofu init -reconfigure`
-   once. Then delete its `terraform.tfstate`. R2 holds the state now.
+4. Run `./tofu init`, `./tofu plan` and `./tofu apply` there.
+5. Delete the secrets file, and delete the token in the dashboard.
 
 `./tofu` calls the shared wrapper `infra/tofu`. It downloads the pinned
 OpenTofu on first use, checks its SHA-256, and loads the secrets file. It
@@ -73,10 +69,11 @@ The wrapper refuses apply, destroy, import and `state rm`/`mv` in any other
 checkout, with changes that are not committed, or behind `origin/release`.
 Plan runs anywhere.
 
-1. Change the `.tf` files on a branch. The PR's "tofu plan (cloudflare)"
-   job puts the plan in its summary. Read it.
+1. Change the `.tf` files on a branch. The PR checks format, validate and
+   import blocks. It shows no plan, because a PR gets no token.
 2. Merge the PR, then run `yarn release`. The "Infra apply" workflow
-   plans and applies the stack from `release`. Only one apply runs at a
+   plans and applies the stack from `release`, and shows the plan in its
+   run summary. Read it. Only one apply runs at a
    time, and the R2 lock file stops an apply from a checkout at the same
    time.
 3. If the apply created a resource, add its import block to `imports.tf`
@@ -84,8 +81,7 @@ Plan runs anywhere.
    `infra/check-imports.sh` fails in CI, and the apply run shows a
    warning.
 
-To apply by hand, run `git pull --ff-only`, `./tofu plan` and
-`./tofu apply` in the `release` checkout.
+To apply by hand, see "Apply by hand".
 
 If `plan` shows a change that you did not make, someone changed Cloudflare
 by hand. Apply puts it back to what git says. To keep the manual change,

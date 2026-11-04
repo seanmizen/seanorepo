@@ -12,3 +12,16 @@ import {
   to = github_repository_ruleset.protect_main_and_release
   id = "seanorepo:23945521"
 }
+
+# Made with the API before OpenTofu managed it. The ID is
+# <repository>:<environment>.
+import {
+  to = github_repository_environment.release
+  id = "seanorepo:release"
+}
+
+# The ID is <repository>:<environment>:<policy id>.
+import {
+  to = github_repository_environment_deployment_policy.release
+  id = "seanorepo:release:65495215"
+}
