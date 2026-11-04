@@ -14,10 +14,10 @@ const env = process.env.NODE_ENV || 'development';
 const config: ConfigType = configs[env];
 const { appDomain } = config;
 
-const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY ||
-    'sk_test_51QVX2JBsGhYF8YEWi3iM9PCLwFMG2AMbKx1eq6L4mPMp6TB62S9tve5NypbQmeiTTJ9epEAJhaO01lTLOZI4Huxy0009gNLP2Z',
-);
+// Checkout is off when STRIPE_SECRET_KEY is not set. The code holds no key.
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
+const checkoutOff = { error: 'Checkout is off: STRIPE_SECRET_KEY is not set.' };
 
 const fastify = Fastify<Server, IncomingMessage, ServerResponse>({
   logger: { level: 'error' },
@@ -41,6 +41,10 @@ fastify.get('/api', async (_request, _reply) => {
 // });
 
 fastify.post('/api/create-checkout-session', async (_request, reply) => {
+  if (!stripe) {
+    reply.status(503).send(checkoutOff);
+    return;
+  }
   const session = await stripe.checkout.sessions.create({
     ui_mode: 'embedded',
     submit_type: 'pay',
@@ -64,6 +68,10 @@ fastify.get('/api/session-status', async (request, reply) => {
     return;
   }
 
+  if (!stripe) {
+    reply.status(503).send(checkoutOff);
+    return;
+  }
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
   // update DB with stripe status and stripe email
