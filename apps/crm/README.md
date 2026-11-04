@@ -159,7 +159,7 @@ Two pages are open to everyone:
 ```bash
 yarn workspace crm start           # http://localhost:4100
 yarn workspace crm start:docker    # the same, in a dev container
-yarn workspace crm prod:docker     # the prod image and Litestream (see Production), and the demo if .env.demo exists
+yarn workspace crm prod:docker     # the prod image and Litestream (see Production), and the demo if /etc/seanorepo/crm-demo.env exists
 yarn workspace crm test:types
 yarn workspace crm-be test
 ```
@@ -642,18 +642,21 @@ error code and status, with no secret, and the response does not change.
   from the host.
 - **prod:** `docker-compose.yml` sets `NODE_ENV=production`,
   `CRM_PUBLIC_URL=https://crm.seanmizen.com` and `DB_PATH=/data/crm.db`. Each
-  other value comes from an env file on the server. The files are not in
-  the repo, and `deploy.sh` never changes them. Without a file, each of its
-  values is unset.
+  other value comes from an env file in `/etc/seanorepo/` on the server
+  (REQ-SERVER-021). The files are not in the repo, and `deploy.sh` never
+  changes them. Without a file, each of its values is unset. On a webserver,
+  `deploy.sh` stops when `crm.env` or `crm-r2.env` is missing. The "Server
+  secrets" table in `utils/debbie/2026-09-17/README.md` shows how to add a
+  file.
 - **One file for each container.** Each container gets only the secrets
   that it uses:
 
   | File | Read by | Values |
   | --- | --- | --- |
-  | `apps/crm/.env` | `crm` | `CRM_ADMIN_EMAIL`, `SMTP_*`, `EMAIL_FROM_NAME`, `LOG_LEVEL` |
-  | `apps/crm/.env.r2` | `litestream` | `CRM_R2_BUCKET`, `CRM_R2_ENDPOINT`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` |
-  | `apps/crm/.env.demo` | `crm-demo` | `CRM_ADMIN_EMAIL`, `CRM_UNSAFE_DEMO_LOGIN` |
-  | `apps/crm/.env.demo.r2` | `litestream-demo` | the four R2 values of the bucket `crm-demo` |
+  | `/etc/seanorepo/crm.env` | `crm` | `CRM_ADMIN_EMAIL`, `SMTP_*`, `EMAIL_FROM_NAME`, `LOG_LEVEL` |
+  | `/etc/seanorepo/crm-r2.env` | `litestream` | `CRM_R2_BUCKET`, `CRM_R2_ENDPOINT`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` |
+  | `/etc/seanorepo/crm-demo.env` | `crm-demo` | `CRM_ADMIN_EMAIL`, `CRM_UNSAFE_DEMO_LOGIN` |
+  | `/etc/seanorepo/crm-demo-r2.env` | `litestream-demo` | the four R2 values of the bucket `crm-demo` |
 
   The crm app containers get no R2 key, and the sidecars get no SMTP
   password. A test (`crm-be/src/demo.test.ts`) fails when an app container
@@ -674,7 +677,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   origin `https://crm.seanmizen.com`.
 - **Data.** The SQLite file is `/data/crm.db` in the named volume
   `crm_sqlite_data`. The volume is only on the web box.
-- **Secrets.** `apps/crm/.env` on the server, for the `crm` container:
+- **Secrets.** `/etc/seanorepo/crm.env` on the server, for the `crm` container:
 
   ```bash
   CRM_ADMIN_EMAIL=
@@ -684,7 +687,7 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   SMTP_PASS=
   ```
 
-  `apps/crm/.env.r2` on the server, for the `litestream` sidecar only:
+  `/etc/seanorepo/crm-r2.env` on the server, for the `litestream` sidecar only:
 
   ```bash
   CRM_R2_BUCKET=crm
@@ -693,9 +696,9 @@ The crm is live at `crm.seanmizen.com` on the web box (asus).
   LITESTREAM_SECRET_ACCESS_KEY=
   ```
 
-  Copy the four `SMTP_*` lines from `apps/carolinemizen.art/caroline-be/.env`
-  on asus. caroline-be and inside-be send with the same Gmail
-  account, `9mazes@gmail.com`. The `SMTP_PASS` app password gives full access
+  Copy the four `SMTP_*` lines from `/etc/seanorepo/caroline.env` on asus.
+  caroline-be and inside-be send with the same Gmail account,
+  `9mazes@gmail.com`. The `SMTP_PASS` app password gives full access
   to the `9mazes@gmail.com` mailbox. The account is a sender-only account:
   keep no other mail in it. With no `SMTP_PASS`, each sign-in email goes to
   the log (`docker logs crm`).
@@ -753,32 +756,32 @@ both build from the `release` checkout on asus, and both change on
 
 - **Same image, other env.** The `crm-demo` service in `docker-compose.yml`
   uses the same image and settings as `crm`. Only these are different: the
-  volume `crm_demo_sqlite_data`, the env files `apps/crm/.env.demo` and
-  `apps/crm/.env.demo.r2`, the host
+  volume `crm_demo_sqlite_data`, the env files `/etc/seanorepo/crm-demo.env`
+  and `/etc/seanorepo/crm-demo-r2.env`, the host
   port 4101 and `CRM_PUBLIC_URL=https://demo-crm.seanmizen.com`. Its
   sidecar `litestream-demo` backs up to the bucket `crm-demo` with the
   prefix `demo-crm.db/`, with an R2 key that reaches only that bucket.
 - **Off without the file.** `scripts/prod-docker.sh` (the
   `prod:docker` script) adds the compose profile `demo` only when
-  `apps/crm/.env.demo` exists. Without the file, it prints "The demo is
+  `/etc/seanorepo/crm-demo.env` exists. Without the file, it prints "The demo is
   off.", the demo does not start, and prod does not change.
 - **Routes.** `infra/cloudflare/seanmizen_com.tf` has the DNS record. The
   tunnel sends `demo-crm.seanmizen.com` to `localhost:4101`
   (`apps/cloudflared/config.yml`).
-- **Email is off.** `.env.demo` has no `SMTP_*` lines, so each sign-in email
+- **Email is off.** `crm-demo.env` has no `SMTP_*` lines, so each sign-in email
   goes to the log (`docker logs crm-demo`). The demo never emails an
   address.
 
 ### The env file
 
-`apps/crm/.env.demo` on asus, for the `crm-demo` container:
+`/etc/seanorepo/crm-demo.env` on asus, for the `crm-demo` container:
 
 ```bash
 CRM_ADMIN_EMAIL=demo@example.com
 CRM_UNSAFE_DEMO_LOGIN=true
 ```
 
-`apps/crm/.env.demo.r2` on asus, for the `litestream-demo` sidecar only:
+`/etc/seanorepo/crm-demo-r2.env` on asus, for the `litestream-demo` sidecar only:
 
 ```bash
 CRM_R2_BUCKET=crm-demo
@@ -787,20 +790,18 @@ LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
 ```
 
-Never copy the R2 key of `apps/crm/.env.r2` into `.env.demo.r2`. The demo has an
+Never copy the R2 key of `crm-r2.env` into `crm-demo-r2.env`. The demo has an
 unsafe sign-in, and the prod key can delete the prod backups. Make a demo
 key in the Cloudflare dashboard: *R2 → Manage API tokens → Create API
 token*, permission *Object Read & Write*, applied to the bucket `crm-demo`
 only. Put its *Access Key ID* and *Secret Access Key* in the two
-`LITESTREAM_` lines. Only the owner must read the file:
+`LITESTREAM_` lines. Each file is `root:srv`, mode 0640 (REQ-SERVER-021).
+The "Server secrets" section of `utils/debbie/2026-09-17/README.md` has the
+commands. To see the six names, with no values:
 
 ```bash
-ssh srv@asus
-cd ~/projects/seanorepo/apps/crm
-chmod 600 .env.demo .env.demo.r2 && cut -d= -f1 .env.demo .env.demo.r2
+ssh srv@asus cut -d= -f1 /etc/seanorepo/crm-demo.env /etc/seanorepo/crm-demo-r2.env
 ```
-
-The last part prints the six names, with no values.
 
 ### The unsafe sign-in
 
@@ -849,7 +850,7 @@ starts with `ZZ`.
 
 ### Sean's steps
 
-1. Make `apps/crm/.env.demo` and `apps/crm/.env.demo.r2` on asus, as
+1. Make `/etc/seanorepo/crm-demo.env` and `/etc/seanorepo/crm-demo-r2.env` on asus, as
    [The env file](#the-env-file) shows. The code before the release ignores
    the files.
 2. Run `yarn release`. The "Infra apply" workflow makes the DNS record

@@ -392,6 +392,29 @@ describe('the compose file', () => {
     expect(new Set(sidecarFiles).size).toBe(sidecarFiles.length);
     // An app container never reads an R2 file.
     for (const file of appFiles) expect(sidecarFiles).not.toContain(file);
+    // Each file is a server secret file (REQ-SERVER-021). The prod files are
+    // on the list that deploy.sh checks. The demo files are not: the demo is
+    // off without them.
+    for (const file of [...appFiles, ...sidecarFiles]) {
+      expect(file).toMatch(/^\/etc\/seanorepo\/[a-z0-9-]+\.env$/);
+    }
+    const required = readFileSync(
+      path.join(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        '..',
+        'utils/debbie/2026-09-17/services/server-secrets.list',
+      ),
+      'utf8',
+    )
+      .split('\n')
+      .filter((line) => line.startsWith('/'));
+    expect(required).toContain('/etc/seanorepo/crm.env');
+    expect(required).toContain('/etc/seanorepo/crm-r2.env');
+    expect(required).not.toContain('/etc/seanorepo/crm-demo.env');
+    expect(required).not.toContain('/etc/seanorepo/crm-demo-r2.env');
     // A sidecar gets only CRM_R2_PATH from compose. Its R2 file has the rest.
     for (const service of sidecars) {
       expect(service.environment?.map((line) => line.split('=')[0])).toEqual([

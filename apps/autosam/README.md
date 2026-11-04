@@ -329,8 +329,10 @@ The tunnel sends `autosam.seanmizen.com` to `http://localhost:4090`
 `infra/cloudflare/seanmizen_com.tf`. On the LAN, the edge serves
 `http://autosam.<hostname>.local` (`infra/edge/Caddyfile`).
 
-To turn on editing in production, put the key in `apps/autosam/.env` on
-asus, then start the container again:
+To turn on editing in production, put the key in
+`/etc/seanorepo/autosam.env` on asus, then start the container again. The
+"Server secrets" table in `utils/debbie/2026-09-17/README.md` shows how. The
+dev container reads `apps/autosam/.env`.
 
 ```bash
 AUTOSAM_EDIT_KEY=<a long random key>

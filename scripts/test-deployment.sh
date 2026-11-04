@@ -110,13 +110,14 @@ test_cloudflared() {
   # A signed-out visitor goes to /login. A 200 here means no sign-in guard.
   test_endpoint "http://localhost:4100/" "Sign-in guard" 303 || ((failed++))
 
-  # The demo runs only where apps/crm/.env.demo exists (apps/crm/README.md).
+  # The demo runs only where /etc/seanorepo/crm-demo.env exists
+  # (apps/crm/README.md).
   echo -e "\n${YELLOW}demo-crm.seanmizen.com${NC}"
-  if [ -f "$(dirname "$0")/../apps/crm/.env.demo" ]; then
+  if [ -f /etc/seanorepo/crm-demo.env ]; then
     test_endpoint "http://localhost:4101/api/health" "Health" || ((failed++))
     test_endpoint "http://localhost:4101/" "Sign-in guard" 303 || ((failed++))
   else
-    print_warning "Skipped: apps/crm/.env.demo does not exist, so the demo is off."
+    print_warning "Skipped: /etc/seanorepo/crm-demo.env does not exist, so the demo is off."
   fi
 
   echo -e "\n${YELLOW}seansconverter.com${NC}"

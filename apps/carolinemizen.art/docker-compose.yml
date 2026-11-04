@@ -28,8 +28,6 @@ x-backend-base: &backend-base
     x-bake:
       no-cache: false
       provenance: false
-  env_file:
-    - ./caroline-be/.env
   ports:
     - "${PUBLISH_ADDR:-127.0.0.1}:4021:4021"
   labels:
@@ -62,6 +60,12 @@ services:
     <<: *backend-base
     profiles: ["prod"]
     restart: unless-stopped
+    # The server secrets live in /etc/seanorepo (REQ-SERVER-021). deploy.sh
+    # stops when the file is missing on a webserver. required: false, so
+    # `yarn prod:docker` also runs on a computer with no secrets.
+    env_file:
+      - path: /etc/seanorepo/caroline.env
+        required: false
     # The edge routes to this service by its alias (infra/edge).
     networks:
       default: {}
@@ -74,6 +78,12 @@ services:
   backend-dev:
     <<: *backend-base
     profiles: ["dev"]
+    # caroline-be/.env.example names each key. Compose reads the env files of
+    # every service, also in other profiles. required: false, so the prod
+    # profile runs on a computer with no dev file.
+    env_file:
+      - path: ./caroline-be/.env
+        required: false
     volumes:
       - type: bind
         source: ../../apps/carolinemizen.art/caroline-be

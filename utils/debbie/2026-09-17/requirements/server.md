@@ -798,3 +798,62 @@ Cloudflare tunnel, the network failover watchdog and remote SSH are in
 - **Relations:**
   - refines REQ-SERVER-006
   - refines REQ-DEPLOY-002
+
+## REQ-SERVER-021 — Server secrets live in one directory
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1162
+- **Type:** constraint
+- **Priority:** P1
+- **Statement:** Each app secret file on a server shall be in
+  `/etc/seanorepo/`, with the directory `root:srv` mode 0750 and each file
+  `root:srv` mode 0640.
+- **Rationale:** With one directory, a person who moves the sites to a new
+  machine knows where the secrets are. A secret file in the checkout is one
+  `git clean` away from deletion (REQ-DEPLOY-006). root owns each file, so the
+  deploy user cannot change it. The group of the deploy user reads it,
+  because `docker compose` runs as that user and reads each `env_file`.
+
+  The compose files read each file with `required: false`, so
+  `yarn prod:docker` also runs on a computer with no secrets.
+  `setup-server-environment.sh` makes the directory. It never writes or reads
+  a secret file. A person puts each file there by hand, as the "Server
+  secrets" table in `utils/debbie/2026-09-17/README.md` shows.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "/etc/seanorepo is
+    root:srv, mode 750"
+  - Inspection — `utils/debbie/2026-09-17/services/server-secrets.list` names
+    only paths in `/etc/seanorepo/`, and each prod `env_file` of the apps
+    compose files is a path there.
+- **Relations:**
+  - refines REQ-DEPLOY-006
+
+## REQ-SERVER-022 — The deploy stops when a server secret is missing
+
+- **Status:** active
+- **Source:** sean
+- **Origin:** #1162
+- **Type:** functional
+- **Priority:** P1
+- **Statement:** On a machine with the webserver role, when a file in
+  `utils/debbie/2026-09-17/services/server-secrets.list` is missing or the
+  deploy user cannot read it, the deploy shall stop before
+  `yarn prod:docker` with an error that names each such file.
+- **Rationale:** `required: false` (REQ-SERVER-021) starts an app with no
+  secrets when its file is missing, and nothing reports it: no sign-in email,
+  no backup to R2. The check makes the missing file an error in the journal.
+  The deploy writes no marker, so the next poll tries again.
+
+  The list is one plain file, one path on each line, in the checkout that the
+  deploy deploys. A change to an app that adds a secret file changes the list
+  in the same commit. The crm demo files are not on the list: the demo is off
+  without them.
+- **Verification:**
+  - Test — `utils/debbie/2026-09-17/payload/assert.sh` › "a webserver with a
+    missing secret file stops before yarn prod:docker"
+  - Inspection — the "Server secrets" table in
+    `utils/debbie/2026-09-17/README.md` names each file on the list.
+- **Relations:**
+  - depends-on REQ-SERVER-021
+  - refines REQ-SERVER-014
