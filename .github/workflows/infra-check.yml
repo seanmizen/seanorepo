@@ -24,11 +24,12 @@ jobs:
       # One stack's failure must not cancel the other's check.
       fail-fast: false
       matrix:
-        stack: [cloudflare, github]
+        stack: [cloudflare, github, tailscale]
     # Placeholders: nothing here calls an API. The github stack's wrapper
     # wants a token even for fmt.
     env:
       CLOUDFLARE_SECRETS: /nonexistent
+      TAILSCALE_SECRETS: /nonexistent
       GITHUB_TOKEN: ci-placeholder
     steps:
       - uses: actions/checkout@v4
