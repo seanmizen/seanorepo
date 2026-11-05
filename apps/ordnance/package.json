@@ -9,7 +9,8 @@
     "build:wasm": "bash ./build.sh",
     "build": "bash ./build.sh && yarn rsbuild build",
     "test": "cd game && zig build test",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "styles": "bash ./build.sh && bash ./scripts/styles.sh"
   },
   "devDependencies": {
     "@rsbuild/core": "^1.6.13",

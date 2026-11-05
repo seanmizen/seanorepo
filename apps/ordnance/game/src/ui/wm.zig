@@ -11,6 +11,8 @@
 //!   make a new window (snapped, when near an edge).
 //! - The title bar has a snap button (a 3 x 3 picker of the zones) and a
 //!   minimise button (only the title bar stays).
+//! - A press in the content of a window reports a click (`Update.click`),
+//!   for example on the map panel.
 //! - Tab moves the focus to the next window, like Alt+Tab. Shift+Tab goes
 //!   back. The focused window comes to the top, and a minimised one opens.
 //!
@@ -26,12 +28,12 @@
 //! It draws through the painter of view.zig. It does not know the game.
 //! `update` returns an Action, and main.zig does it.
 const std = @import("std");
-const ui_types = @import("ui_types.zig");
+const ui_types = @import("../style.zig");
 
 const Color = ui_types.Color;
 const Mode = ui_types.Mode;
 
-pub const Panel = enum(u8) { forces, supply, square, keys };
+pub const Panel = enum(u8) { forces, supply, square, keys, minimap };
 
 pub fn panelTitle(p: Panel) []const u8 {
     return switch (p) {
@@ -39,6 +41,7 @@ pub fn panelTitle(p: Panel) []const u8 {
         .supply => "Supply",
         .square => "Square",
         .keys => "Keys",
+        .minimap => "Map",
     };
 }
 
@@ -49,6 +52,7 @@ pub fn panelSize(p: Panel) [2]f32 {
         .supply => .{ 240, 112 },
         .square => .{ 260, 96 },
         .keys => .{ 330, 208 },
+        .minimap => .{ 240, 240 },
     };
 }
 
@@ -189,6 +193,7 @@ fn menuItems(m: Menu) []const Item {
             .{ .label = "Supply", .hot = 0, .key = "", .op = .{ .action = .{ .toggle = .supply } } },
             .{ .label = "Square", .hot = 1, .key = "", .op = .{ .action = .{ .toggle = .square } } },
             .{ .label = "Keys", .hot = 0, .key = "", .op = .{ .action = .{ .toggle = .keys } } },
+            .{ .label = "Map", .hot = 1, .key = "", .op = .{ .action = .{ .toggle = .minimap } } },
             .{ .label = "Heightmap", .hot = 0, .key = "H", .op = .{ .action = .heightmap } },
             .{ .label = "Debug", .hot = 0, .key = "Ctrl+D", .op = .{ .action = .debug } },
         },
@@ -217,10 +222,16 @@ const Drag = union(enum) {
     window: struct { win: u8, offx: f32, offy: f32 },
     /// One tab follows the pointer as a translucent window.
     tab: struct { win: u8, tab: u8, offx: f32, offy: f32 },
+    /// The button went down in the content of a window. While it is down,
+    /// each tick reports a click there.
+    content: u8,
 };
 
 pub const Update = struct {
     action: Action = .none,
+    /// A press (or a drag) in the content of a panel: the panel, and the
+    /// point as a part (0..1) of the content width and height.
+    click: ?struct { panel: Panel, u: f32, v: f32 } = null,
     /// True when the window manager used the mouse: the map must ignore it.
     mouse: bool = false,
     /// True when it used the keys: the game must ignore them.
@@ -265,11 +276,13 @@ pub const Wm = struct {
                 _ = wm.open(.forces, .bl, 0, 0);
                 const s = wm.open(.supply, .tl, 0, 0).?;
                 wm.addTab(s, .keys);
+                _ = wm.open(.minimap, .tr, 0, 0);
                 _ = wm.open(.square, .br, 0, 0);
             },
             .logistics => {
                 const s = wm.open(.supply, .tl, 0, 0).?;
                 wm.addTab(s, .keys);
+                _ = wm.open(.minimap, .tr, 0, 0);
                 _ = wm.open(.square, .br, 0, 0);
             },
             .kill => {
@@ -678,7 +691,12 @@ pub const Wm = struct {
                     wm.picker = i;
                 } else if (minButton(w).has(in.mx, in.my)) {
                     w.min = !w.min;
-                } else if (in.my < w.rect.y + title_h) {
+                } else if (in.my >= w.rect.y + title_h) {
+                    if (!w.min) {
+                        wm.drag = .{ .content = i };
+                        out.click = contentClick(w, in.mx, in.my);
+                    }
+                } else {
                     var tab: ?u8 = null;
                     for (0..w.n) |k| if (tabRect(w, p, @intCast(k)).has(in.mx, in.my)) {
                         tab = @intCast(k);
@@ -688,6 +706,12 @@ pub const Wm = struct {
                 }
             } else {
                 out.mouse = wm.hit(in.mx, in.my) != null;
+            },
+            .content => |i| {
+                out.mouse = true;
+                if (!in.down or !wm.wins[i].used) {
+                    wm.drag = .none;
+                } else out.click = contentClick(&wm.wins[i], in.mx, in.my);
             },
             .pending => |d| {
                 out.mouse = true;
@@ -751,6 +775,16 @@ pub const Wm = struct {
             },
         }
         return out;
+    }
+
+    fn contentClick(w: *const Win, x: f32, y: f32) @FieldType(Update, "click") {
+        const r = w.rect;
+        const h = r.h - title_h;
+        return .{
+            .panel = w.activePanel(),
+            .u = std.math.clamp((x - r.x) / r.w, 0, 1),
+            .v = std.math.clamp((y - r.y - title_h) / h, 0, 1),
+        };
     }
 
     /// Move each tab of window `from` into window `to`, while it has room.
@@ -1032,6 +1066,18 @@ test "the minimise button leaves only the title bar" {
     press(&wm, &p, b.x + 5, b.y + 5);
     wm.layout(&p);
     try std.testing.expectEqual(@as(f32, title_h), wm.wins[f].rect.h);
+}
+
+test "a press in the map panel reports where" {
+    var p: TestPainter = .{};
+    var wm = testWm();
+    wm.layout(&p);
+    const mw = wm.wins[wm.find(.minimap).?[0]].rect;
+    const u = wm.update(&p, .{ .mx = mw.x + mw.w / 2, .my = mw.y + title_h + (mw.h - title_h) / 4, .down = true, .pressed = true });
+    try std.testing.expectEqual(Panel.minimap, u.click.?.panel);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.5), u.click.?.u, 0.01);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.25), u.click.?.v, 0.01);
+    try std.testing.expect(u.mouse);
 }
 
 test "a saved layout loads back" {

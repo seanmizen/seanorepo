@@ -12,7 +12,13 @@
 //   so this file sends it on again with no Ctrl. The game reads Ctrl from
 //   the keyboard.
 // - The numpad + and - work as = and -: the engine has no numpad keys.
+//
+// The style and the map seed: the URL (?style=fog&seed=3), else the
+// ORDNANCE_STYLE that the dev server was started with (rsbuild.config.js).
 import { type LoadFailure, loadWasm } from '#swindowzig/loader';
+
+// RSBuild puts the value in at build time (rsbuild.config.js).
+declare const process: { env: Record<string, string | undefined> };
 
 function show(title: string, message: string): void {
   const overlay = document.getElementById('overlay');
@@ -96,6 +102,19 @@ window.addEventListener(
 // The game uses the right mouse button: no context menu on the canvas.
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
+const styles = [
+  'supply_line',
+  'drone_war',
+  'blitz',
+  'fog',
+  'manoeuvre',
+  'frontier',
+];
+const params = new URLSearchParams(location.search);
+const styleName = params.get('style') ?? process.env.ORDNANCE_STYLE ?? '';
+const styleIndex = Math.max(0, styles.indexOf(styleName));
+const seed = Math.max(1, Number.parseInt(params.get('seed') ?? '1', 10) || 1);
+
 const canvas = document.getElementById('canvas') as HTMLCanvasElement | null;
 if (canvas) {
   loadWasm({
@@ -103,6 +122,10 @@ if (canvas) {
     wasmUrl: './ordnance.wasm',
     logPrefix: '[ordnance]',
     canvasSize: 'device',
+    env: {
+      jsStyle: () => styleIndex,
+      jsSeed: () => seed,
+    },
     onFailure,
     onStart: () => document.getElementById('overlay')?.classList.add('hidden'),
   }).catch((err) => show('Start failed', String(err)));

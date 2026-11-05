@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     const preview = b.addExecutable(.{
         .name = "preview",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/preview.zig"),
+            .root_source_file = b.path("src/preview_main.zig"),
             .target = host,
             .optimize = .ReleaseSafe,
         }),
