@@ -12241,6 +12241,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ordnance@workspace:apps/ordnance":
+  version: 0.0.0-use.local
+  resolution: "ordnance@workspace:apps/ordnance"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "own-keys@npm:^1.0.1":
   version: 1.0.1
   resolution: "own-keys@npm:1.0.1"

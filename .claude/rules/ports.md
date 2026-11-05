@@ -46,6 +46,8 @@ use their host ports. See `infra/edge/README.md`.
 | 4090 | autosam.seanmizen.com (page and song API in one process). 4091 reserved. |
 | 4100 | crm.seanmizen.com (apps/crm, pages and API in one process). Not on the LAN edge: sign-in needs HTTPS. |
 | 4101 | demo-crm.seanmizen.com (apps/crm, the `crm-demo` service: the same image as crm). Runs only where `/etc/seanorepo/crm-demo.env` exists. Not on the LAN edge. |
+| 4110 | ordnance (apps/ordnance, the RSBuild dev server). Local only. Not deployed. |
+| 4111-4116 | ordnance, one dev server for each playstyle (`yarn workspace ordnance styles`). Local only. |
 
 ### Add a service
 
