@@ -1,0 +1,6 @@
+# Built by build.sh and RSBuild.
+public/ordnance.wasm
+dist/
+game/zig-out/
+game/zig-pkg/
+game/.zig-cache/
