@@ -148,14 +148,22 @@ pub fn waterField(x: f32, y: f32) f32 {
     return @min(s, p);
 }
 
-/// Woods: a value above 0 is wood.
-pub fn woodField(x: f32, y: f32) f32 {
-    var w = noise(x / 3.2, y / 3.2, 31) * 0.8 + noise(x, y, 32) * 0.2 - 0.72;
-    // The east woods, a cover for a route to the east sector.
-    if (x > 24 and x < 31 and y > 16 and y < 29) w += 0.3;
+/// Woods: a value above 0 is wood. The field is warped by noise, so the
+/// edges of the woods wander and do not follow the squares.
+pub fn woodField(x0: f32, y0: f32) f32 {
+    const x = x0 + 1.3 * (noise(x0 / 1.7, y0 / 1.7, 33) - 0.5);
+    const y = y0 + 1.3 * (noise(x0 / 1.7, y0 / 1.7, 34) - 0.5);
+    var w = noise(x / 3.2, y / 3.2, 31) * 0.75 + noise(x * 1.3, y * 1.3, 32) * 0.25 - 0.72;
+    // The east woods, a cover for a route to the east sector. The edges
+    // fade over about 2 squares.
+    w += 0.32 * ramp(x - 24) * ramp(31 - x) * ramp(y - 16) * ramp(29 - y);
     // A copse on the west ridge.
     w += 0.3 * bump(@sqrt((x - 13) * (x - 13) + (y - 26) * (y - 26)), 1.2);
     return w;
+}
+
+fn ramp(d: f32) f32 {
+    return smooth(std.math.clamp(d / 2, 0, 1));
 }
 
 // ---------------------------------------------------------------- the map
@@ -247,6 +255,26 @@ pub const Map = struct {
         return true;
     }
 
+    /// The viewshed: for each square within `range` of (ox, oy), true when
+    /// an eye `eye` metres above that point sees a man in the square.
+    pub fn viewshed(m: *const Map, ox: f32, oy: f32, eye: f32, range: f32, out: *[cells]bool) void {
+        out.* = @splat(false);
+        const x0: i32 = @intFromFloat(@max(0, @floor(ox - range)));
+        const x1: i32 = @intFromFloat(@min(size - 1, @floor(ox + range)));
+        const y0: i32 = @intFromFloat(@max(0, @floor(oy - range)));
+        const y1: i32 = @intFromFloat(@min(size - 1, @floor(oy + range)));
+        var y = y0;
+        while (y <= y1) : (y += 1) {
+            var x = x0;
+            while (x <= x1) : (x += 1) {
+                const tx = @as(f32, @floatFromInt(x)) + 0.5;
+                const ty = @as(f32, @floatFromInt(y)) + 0.5;
+                if ((tx - ox) * (tx - ox) + (ty - oy) * (ty - oy) > range * range) continue;
+                out[idx(x, y)] = m.sees(ox, oy, eye, tx, ty);
+            }
+        }
+    }
+
     /// Make the map. It is the same each time.
     pub fn generate(m: *Map) void {
         for (0..fine_n) |iy| for (0..fine_n) |ix| {
@@ -300,8 +328,8 @@ pub const Map = struct {
             m.hedge_e[c] = false;
             m.hedge_s[c] = false;
             if (cy < 9 or m.ground[c] != .grass) continue;
-            if (cx < size - 1 and m.ground[c + 1] == .grass and hash2(cx, cy, 41) < 0.42) m.hedge_e[c] = true;
-            if (cy < size - 1 and m.ground[c + size] == .grass and hash2(cx, cy, 42) < 0.42) m.hedge_s[c] = true;
+            if (cx < size - 1 and m.ground[c + 1] == .grass and hash2(cx, cy, 41) < 0.32) m.hedge_e[c] = true;
+            if (cy < size - 1 and m.ground[c + size] == .grass and hash2(cx, cy, 42) < 0.32) m.hedge_s[c] = true;
         };
         for (0..cells) |c| if (m.way[c] != .none) m.cutHedges(@intCast(c));
     }

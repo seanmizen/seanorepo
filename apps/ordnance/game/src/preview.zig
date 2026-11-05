@@ -6,10 +6,15 @@
 //!                              frame (1280 x 1000) with the CPU painter.
 //!                              plan: none (default) or west (scenario.zig).
 //!                              mode: view, logistics, kill or intel.
+//!                              x,y,px: centre the frame on map point x,y
+//!                              at px pixels for each square.
+//!                              height: show the heightmap (or none).
+//!                              x,y: the sightlines from that square.
 const std = @import("std");
 const map = @import("map.zig");
 const sim = @import("sim.zig");
-const raster = @import("raster.zig");
+const terrain = @import("terrain.zig");
+const wm_mod = @import("wm.zig");
 const view = @import("view.zig");
 const scenario = @import("scenario.zig");
 
@@ -19,7 +24,6 @@ const H = 1000;
 /// A painter that draws into an RGB buffer. It does not draw text.
 const CpuPainter = struct {
     px: []u8,
-    terrain_img: []const u8,
 
     fn blend(p: *CpuPainter, x: i32, y: i32, c: view.Color) void {
         if (x < 0 or y < 0 or x >= W or y >= H) return;
@@ -50,17 +54,44 @@ const CpuPainter = struct {
         try p.fill(x + w - lw, y + lw, lw, h - 2 * lw, c);
     }
 
-    pub fn terrain(p: *CpuPainter, x: f32, y: f32, w: f32, h: f32) !void {
-        for (0..H) |sy| for (0..W) |sx| {
-            const u = (@as(f32, @floatFromInt(sx)) + 0.5 - x) / w;
-            const v = (@as(f32, @floatFromInt(sy)) + 0.5 - y) / h;
-            if (u < 0 or v < 0 or u >= 1 or v >= 1) continue;
-            const tx: usize = @intFromFloat(u * raster.width);
-            const ty: usize = @intFromFloat(v * raster.height);
-            const ti = (ty * raster.width + tx) * 4;
-            const i = (sy * W + sx) * 3;
-            @memcpy(p.px[i .. i + 3], p.terrain_img[ti .. ti + 3]);
-        };
+    pub fn line(p: *CpuPainter, ax: f32, ay: f32, bx: f32, by: f32, w: f32, c: view.Color) !void {
+        p.band(ax, ay, bx, by, w / 2 + 0.5, c, true);
+    }
+
+    pub fn glow(p: *CpuPainter, ax: f32, ay: f32, bx: f32, by: f32, w: f32, c: view.Color) !void {
+        p.band(ax, ay, bx, by, w / 2, c, false);
+    }
+
+    /// A line by the distance from each pixel to the segment.
+    fn band(p: *CpuPainter, ax: f32, ay: f32, bx: f32, by: f32, half: f32, c: view.Color, hard: bool) void {
+        const x0: i32 = @intFromFloat(@floor(@min(ax, bx) - half));
+        const x1: i32 = @intFromFloat(@ceil(@max(ax, bx) + half));
+        const y0: i32 = @intFromFloat(@floor(@min(ay, by) - half));
+        const y1: i32 = @intFromFloat(@ceil(@max(ay, by) + half));
+        if (x1 < 0 or y1 < 0 or x0 >= W or y0 >= H) return;
+        const dx = bx - ax;
+        const dy = by - ay;
+        const l2 = @max(dx * dx + dy * dy, 0.0001);
+        var y = @max(y0, 0);
+        while (y <= @min(y1, H - 1)) : (y += 1) {
+            var x = @max(x0, 0);
+            while (x <= @min(x1, W - 1)) : (x += 1) {
+                const fx = @as(f32, @floatFromInt(x)) + 0.5;
+                const fy = @as(f32, @floatFromInt(y)) + 0.5;
+                const t = std.math.clamp(((fx - ax) * dx + (fy - ay) * dy) / l2, 0, 1);
+                const ex = ax + t * dx - fx;
+                const ey = ay + t * dy - fy;
+                const d = @sqrt(ex * ex + ey * ey) / half;
+                if (d >= 1) continue;
+                const a = if (hard) std.math.clamp((1 - d) * half, 0, 1) else (1 - d) * (1 - d);
+                p.blend(x, y, c.alpha(a));
+            }
+        }
+    }
+
+    pub fn measure(p: *CpuPainter, s: []const u8, size: f32) f32 {
+        _ = p;
+        return @as(f32, @floatFromInt(s.len)) * size * 0.5;
     }
 
     pub fn hatch(p: *CpuPainter, x: f32, y: f32, w: f32, h: f32, c: view.Color) !void {
@@ -88,7 +119,7 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const args = try init.minimal.args.toSlice(alloc);
     if (args.len < 2) {
-        std.debug.print("usage: preview ascii | trace <seconds> [plan] | frame <out.ppm> <seconds> [none|west] [view|logistics|kill|intel]\n", .{});
+        std.debug.print("usage: preview ascii | trace <seconds> [plan] | frame <out.ppm> <seconds> [none|west] [view|logistics|kill|intel] [x,y,px_per_square] [height]\n", .{});
         return;
     }
     const s = try alloc.create(sim.Sim);
@@ -115,15 +146,36 @@ pub fn main(init: std.process.Init) !void {
     scenario.run(s, plan, seconds);
     std.debug.print("t={d}s trucks lost {d}, supply delivered {d:.0}, shells {d}, outcome {s}\n", .{ seconds, s.stats.trucks_lost, s.stats.supply_delivered, s.stats.shells, @tagName(s.outcome) });
 
-    const base = try alloc.alloc(u8, raster.bytes);
-    const img = try alloc.alloc(u8, raster.bytes);
-    raster.base(&s.m, base);
-    raster.compose(&s.m, base, img);
+    var shapes = try terrain.build(alloc, &s.m);
+    _ = &shapes;
     const px = try alloc.alloc(u8, W * H * 3);
     @memset(px, 0);
-    var painter: CpuPainter = .{ .px = px, .terrain_img = img };
-    const cam = view.Camera.fit(W, H);
-    try view.draw(&painter, s, cam, .{ .mode = mode, .hover = null }, W, H);
+    var painter: CpuPainter = .{ .px = px };
+    var cam = view.Camera.fit(W, H);
+    if (args.len > 6) {
+        // A zoom: the map point at the middle of the frame, and the squares
+        // per pixel. For example: 15,21,60.
+        var it = std.mem.splitScalar(u8, args[6], ',');
+        const zx = try std.fmt.parseFloat(f32, it.next() orelse "20");
+        const zy = try std.fmt.parseFloat(f32, it.next() orelse "20");
+        cam.s = try std.fmt.parseFloat(f32, it.next() orelse "40");
+        cam.ox = W / 2 - zx * cam.s;
+        cam.oy = H / 2 - zy * cam.s;
+    }
+    var wm = wm_mod.Wm.init();
+    wm.area = .{ .x = 0, .y = view.top_bar, .w = W, .h = H - view.top_bar - view.bottom_bar };
+    const height = args.len > 7 and std.mem.eql(u8, args[7], "height");
+    var sight: [map.cells]bool = @splat(false);
+    var ui: view.Ui = .{ .mode = mode, .hover = null, .heightmap = height };
+    if (args.len > 8) {
+        // Sightlines from a square: x,y.
+        var it = std.mem.splitScalar(u8, args[8], ',');
+        const sx = try std.fmt.parseInt(i32, it.next() orelse "0", 10);
+        const sy = try std.fmt.parseInt(i32, it.next() orelse "0", 10);
+        s.m.viewshed(@as(f32, @floatFromInt(sx)) + 0.5, @as(f32, @floatFromInt(sy)) + 0.5, 2, view.sight_range, &sight);
+        ui.sight = map.idx(sx, sy);
+    }
+    try view.draw(&painter, s, &shapes, cam, ui, &wm, W, H, &.{}, &sight, false);
 
     const file = try std.Io.Dir.cwd().createFile(io, args[2], .{});
     defer file.close(io);
