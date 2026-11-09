@@ -72,7 +72,7 @@ export const DEFAULTS = {
   steps: 30,
   run: 1,
   N: 30,
-  walk: 20, // longest walk leg in minutes
+  walk: 0, // longest walk leg in minutes. 0: the same as N
   budget: 1500,
   candidates: 12,
   interchange: 0.25, // share of station cost to stop where a station exists
@@ -134,5 +134,6 @@ export function parse(qs: string): Params {
       if (!SHAPES[a]) throw new Error(`Unknown shape: ${a}.`);
       return [a, w ? num('shapes', w) : 1];
     });
-  return { ...(out as typeof DEFAULTS), tiers, shapes, chain, tierDefs };
+  const walk = (out.walk as number) || (out.N as number);
+  return { ...(out as typeof DEFAULTS), walk, tiers, shapes, chain, tierDefs };
 }

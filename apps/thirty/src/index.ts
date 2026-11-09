@@ -44,7 +44,7 @@ const HINT: Record<string, string> = {
   run: 'Seed for the algorithm.',
   candidates: 'Candidate lines for each greedy step.',
   N: 'Target trip time in minutes.',
-  walk: 'Longest walk leg in minutes: to a station, from a station, between stations, or the whole trip.',
+  walk: 'Longest walk leg in minutes: to a station, from a station, between stations, or the whole trip. 0: the same as N.',
   gpu: '1: score on the GPU if the browser has WebGPU. 0: on the CPU. The result is the same.',
   budget: 'Total cost of track and stations.',
   interchange: 'Share of the station cost to stop at an existing station.',
