@@ -1,0 +1,22 @@
+{
+  "name": "thirty",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "rsbuild dev",
+    "build": "rsbuild build",
+    "preview": "rsbuild preview",
+    "test": "node --test 'src/*.test.ts'",
+    "check:urls": "node scripts/check-urls.mjs"
+  },
+  "dependencies": {
+    "simplex-noise": "^4.0.3"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^1.6.13",
+    "@types/node": "^22.19.1",
+    "puppeteer": "^24.32.1",
+    "typescript": "^5.9.3"
+  }
+}
