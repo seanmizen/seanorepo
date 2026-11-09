@@ -21,7 +21,7 @@ import vert from './vert-stippling.glsl';
 
 /* Anything a click can be aimed at, plus anything marked as UI. A click on
    one of these was meant for it, not for the background behind it. */
-const INTERACTIVE =
+export const INTERACTIVE =
   'a[href], button, input, select, textarea, summary, label, [tabindex]:not([tabindex="-1"]), [data-no-ripple]';
 
 /* Params that map straight onto a uniform of the same name. */
