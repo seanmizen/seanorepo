@@ -1,18 +1,22 @@
 import { fromBytes, genCity } from './gen.ts';
+import { gpu } from './gpu.ts';
+import type { Eval, Prep } from './graph.ts';
 import { hashNet, run, SAMPLES, type Snap, spent } from './net.ts';
 import { parse } from './params.ts';
 import { pool } from './pool.ts';
 
 // Runs the chain. Posts the city once, then a snapshot per step (at most one each 100 ms).
-// The pool scores each batch of greedy candidates. Anneal and random score on this thread.
+// Each batch of greedy candidates gets its J from the pool, or with gpu=1 and WebGPU from the GPU.
+// On the GPU, the pool prepares the networks. Anneal and random score on this thread.
 self.onmessage = async ({ data }: MessageEvent<string>) => {
   try {
     const p = parse(data);
     const res = p.city ? await fetch(`/cities/${p.city}.bin`) : null;
     if (res && !res.ok) throw new Error(`Unknown city: ${p.city}.`);
     const city = res ? fromBytes(await res.arrayBuffer(), p.city) : genCity(p);
-    postMessage({ type: 'city', city });
-    const evalIn = pool(city, data);
+    const score = p.gpu ? await gpu(city, p, SAMPLES) : null;
+    postMessage({ type: 'city', city, gpu: !!score });
+    const job = pool(city, data);
     // The pool evaluates each snapshot with 256 samples. The chain posts the snapshots in step order.
     let posted = Promise.resolve();
     let last = 0;
@@ -22,7 +26,7 @@ self.onmessage = async ({ data }: MessageEvent<string>) => {
       if (!end && s.step > 0 && performance.now() - last < 100) return;
       last = performance.now();
       const { net, ...rest } = s;
-      const e = evalIn(net, 256);
+      const e = job<Eval>({ net, S: 256 });
       const snap = {
         type: 'snap',
         ...rest,
@@ -39,8 +43,13 @@ self.onmessage = async ({ data }: MessageEvent<string>) => {
     for (let r = steps.next(); !r.done; ) {
       const s = r.value;
       if (Array.isArray(s)) {
-        const es = await Promise.all(s.map((n) => evalIn(n, SAMPLES)));
-        r = steps.next(es.map((e) => e.J));
+        const all = <T>(prep: boolean) =>
+          Promise.all(s.map((net) => job<T>({ net, S: SAMPLES, prep })));
+        r = steps.next(
+          score
+            ? await score(await all<Prep>(true))
+            : (await all<Eval>(false)).map((e) => e.J),
+        );
       } else {
         post(s);
         r = steps.next();

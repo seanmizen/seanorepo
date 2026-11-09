@@ -72,6 +72,7 @@ export const DEFAULTS = {
   steps: 30,
   run: 1,
   N: 30,
+  walk: 20, // longest walk leg in minutes
   budget: 1500,
   candidates: 12,
   interchange: 0.25, // share of station cost to stop where a station exists
@@ -80,6 +81,7 @@ export const DEFAULTS = {
   shapes: 'line:1', // line shapes and their weights
   turn: 180, // largest turn in degrees at a via point or a join station
   join: 0, // share of anneal moves that merge two lines
+  gpu: 1, // 1: score on the GPU if the browser has WebGPU. 0: on the CPU
 };
 
 export type Params = Omit<typeof DEFAULTS, 'tiers' | 'shapes'> & {
