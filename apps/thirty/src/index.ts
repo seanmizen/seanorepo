@@ -25,8 +25,8 @@ const value = (k: string) => q.get(k) ?? defaultOf(k);
 // The setup form, in groups. A parameter in no group goes in Other, so new ones show with no UI change.
 const GROUPS: [string, string[]][] = [
   ['City', ['city', 'seed', 'size', 'cell', 'sea', 'rivers', 'hills', 'warp']],
-  ['Run', ['algo', 'steps', 'run', 'candidates']],
-  ['Goal', ['N', 'budget']],
+  ['Run', ['algo', 'steps', 'run', 'candidates', 'gpu']],
+  ['Goal', ['N', 'walk', 'budget']],
   ['Stations', ['interchange', 'snap']],
   ['Lines', ['shapes', 'turn', 'join']],
 ];
@@ -44,6 +44,8 @@ const HINT: Record<string, string> = {
   run: 'Seed for the algorithm.',
   candidates: 'Candidate lines for each greedy step.',
   N: 'Target trip time in minutes.',
+  walk: 'Longest walk leg in minutes: to a station, from a station, between stations, or the whole trip.',
+  gpu: '1: score on the GPU if the browser has WebGPU. 0: on the CPU. The result is the same.',
   budget: 'Total cost of track and stations.',
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
@@ -165,8 +167,10 @@ let city: City;
 const snaps: Snap[] = [];
 const worker = new Worker(new URL('./worker.ts', import.meta.url));
 worker.onmessage = ({ data }) => {
-  if (data.type === 'city') city = data.city;
-  else if (data.type === 'snap') {
+  if (data.type === 'city') {
+    city = data.city;
+    document.body.dataset.gpu = data.gpu ? '1' : '0';
+  } else if (data.type === 'snap') {
     const follow = slider.value === slider.max;
     snaps.push(data);
     slider.max = String(snaps.length - 1);

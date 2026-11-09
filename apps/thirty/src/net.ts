@@ -44,7 +44,7 @@ function route(city: City, a: number, b: number) {
     buildCache.set(city, g);
   }
   const prev = new Int32Array(g.n);
-  dijkstra([g], a, Number.POSITIVE_INFINITY, b, prev);
+  dijkstra(g, a, Number.POSITIVE_INFINITY, b, prev);
   const path = [b];
   while (path[0] !== a) {
     if (prev[path[0]] < 0) return null;

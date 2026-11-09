@@ -5585,7 +5585,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@webgpu/types@npm:*":
+"@webgpu/types@npm:*, @webgpu/types@npm:0.1.68":
   version: 0.1.68
   resolution: "@webgpu/types@npm:0.1.68"
   checksum: 10c0/7d197050dcebaaec7ab2f167dbe579b8bd6bf4c2589aec5ec04eb39c4cb2a0a62afb0874554796d7fad7d8fd57069a8ddfe50407cda0323aaa4754e378075238
@@ -15351,6 +15351,7 @@ __metadata:
   dependencies:
     "@rsbuild/core": "npm:^1.6.13"
     "@types/node": "npm:^22.19.1"
+    "@webgpu/types": "npm:0.1.68"
     puppeteer: "npm:^24.32.1"
     simplex-noise: "npm:^4.0.3"
     typescript: "npm:^5.9.3"
