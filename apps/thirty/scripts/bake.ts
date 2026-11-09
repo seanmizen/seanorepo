@@ -12,7 +12,7 @@
 // The output is the same bytes on each run: a fixed gzip level and a fixed gzip header.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { genCity } from '../src/gen.ts';
+import { fromBytes, genCity } from '../src/gen.ts';
 import { evaluate } from '../src/graph.ts';
 import { layout, type Pt, tubePath } from '../src/layout.ts';
 import { type Line, run, type Snap } from '../src/net.ts';
@@ -20,6 +20,8 @@ import { parse } from '../src/params.ts';
 
 const T = 256; // Texels on a side.
 const S = 256; // Job samples in each score, the same as the page's display snapshot.
+const CREDIT =
+  'Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus';
 const SIDE = 400; // One line width on the tube map is 1 / SIDE of the city side.
 const out = new URL('../../seanmizen.com/public/thirty/', import.meta.url);
 const urls: string[] = JSON.parse(
@@ -31,8 +33,17 @@ const key = (l: Line) => `${l.tier}:${l.stops.join(',')}`;
 let bytes = 0;
 const index = urls.map((qs, n) => {
   const p = parse(qs);
-  if (p.city) throw new Error(`Use a generated city, not ${qs}.`);
-  const city = genCity(p);
+  // A real city loads from public/cities and needs its data credited.
+  const city = p.city
+    ? fromBytes(
+        new Uint8Array(
+          readFileSync(
+            new URL(`../public/cities/${p.city}.bin`, import.meta.url),
+          ),
+        ).buffer,
+        p.city,
+      )
+    : genCity(p);
   const { w } = city;
   const snaps = [...run(city, p)].filter((s): s is Snap => !Array.isArray(s));
   const steps = snaps.length - 1;
@@ -119,6 +130,7 @@ const index = urls.map((qs, n) => {
     size: w,
     steps,
     bytes: raw.length,
+    ...(p.city ? { credit: CREDIT } : {}),
   };
 });
 writeFileSync(

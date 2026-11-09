@@ -1,4 +1,9 @@
 [
+  "?city=london&algo=greedy&steps=30",
+  "?city=london&algo=greedy:30,anneal:200&shapes=line:1,via:1,arc:1&join=0.3&snap=0.5&tram.station=2&tube.station=20&rer.station=15&express.station=25&budget=4000",
+  "?city=london&goal=revenue&shapes=line:1,link:1&tau=90&budget=3000",
+  "?city=london&tiers=tube,express&algo=greedy:30,anneal:60&budget=3000",
+  "?city=london&algo=greedy&steps=60&budget=4000&shapes=line:1,arc:1&N=45",
   "?seed=101&size=128&sea=0.1&rivers=3&hills=0.2",
   "?seed=102&size=160&sea=0.35&rivers=1&hills=0.3",
   "?seed=103&size=128&sea=0.55&rivers=0&warp=0.8",
@@ -13,10 +18,5 @@
   "?seed=112&size=144&sea=0.2&rivers=3&hills=0.6&algo=greedy:20,anneal:100",
   "?seed=113&size=128&sea=0.12&rivers=1&warp=0.1&tiers=rer,express",
   "?seed=114&size=176&sea=0.5&rivers=2&hills=0.2&shapes=line:1,via:1",
-  "?seed=115&size=160&sea=0.02&rivers=1&hills=1",
-  "?seed=116&size=128&sea=0.3&rivers=4&warp=0.5&algo=anneal&steps=150",
-  "?seed=117&size=208&sea=0.38&hills=0.8&algo=greedy:30,anneal:60&candidates=16",
-  "?seed=118&size=112&sea=0.18&rivers=2&hills=0.3&shapes=line:1,arc:1",
-  "?seed=119&size=144&sea=0.65&rivers=1&warp=0.7&N=45",
-  "?seed=120&size=240&sea=0.22&rivers=3&hills=0.5&algo=greedy:30,anneal:40"
+  "?seed=115&size=160&sea=0.02&rivers=1&hills=1"
 ]
