@@ -22,6 +22,7 @@ uniform float u_hire;          // 1: the hire field; 0: the playground grid
 uniform float u_textStrength;  // how strongly the resting text shows
 uniform float u_textDrift;     // how much the drifting cloud makes it breathe
 uniform float u_revealFade;    // how far the text has faded in, 0 to 1
+uniform float u_maskOpacity;      // how much the content mask hides
 uniform sampler2D u_contentMask;  // white where the page has content
 uniform sampler2D u_tightMask;    // white where [data-mask="tight"] content is
 
@@ -54,7 +55,7 @@ void main() {
 
   // No glyph shows where the page has content.
   vec2 at = middle * 0.5 + 0.5;
-  lit *= 1.0 - max(texture2D(u_contentMask, at).r, texture2D(u_tightMask, at).r);
+  lit *= 1.0 - max(u_maskOpacity * texture2D(u_contentMask, at).r, texture2D(u_tightMask, at).r);
 
   gl_FragColor = vec4(tint, haze, clamp(lit, 0.0, 1.0), clamp(roused / 4.0, 0.0, 1.0));
 }

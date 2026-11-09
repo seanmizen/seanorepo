@@ -27,6 +27,7 @@ uniform float u_sway;        // 0: the core is still; 1: it moves fast enough to
 uniform vec2 u_jumpDir;      // the way the core last jumped, a unit vector
 uniform vec2 u_tail[4];      // the core's tail, link by link, from the core's middle, in world units
 uniform vec2 u_throwAt;      // where the throw has carried the shape, in world units
+uniform float u_maskOpacity;      // how much the content mask hides
 uniform sampler2D u_contentMask;  // white where the page has content
 
 // Venom: tendrils from the core that reach for the cursor. JavaScript moves
@@ -148,7 +149,7 @@ void main() {
 
         // A dot fades out where the page has content.
         vec2 screen = gl_Position.xy / gl_Position.w * 0.5 + 0.5;
-        v_alpha = 1.0 - texture2D(u_contentMask, screen).r;
+        v_alpha = 1.0 - u_maskOpacity * texture2D(u_contentMask, screen).r;
     } else {
         // Vertex shader output
         v_light = vec3(0.0, 0.0, 1.0);

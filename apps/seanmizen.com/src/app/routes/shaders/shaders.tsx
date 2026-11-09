@@ -162,6 +162,7 @@ const Shaders: FC = () => {
           size={stage.size}
           image={image}
           onFps={setFps}
+          clearOfContent
         />
         <p className={styles.tip}>click anywhere</p>
       </div>
