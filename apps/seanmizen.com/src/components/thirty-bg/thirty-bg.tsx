@@ -23,7 +23,7 @@ type City = {
 };
 
 const TEXELS = 256;
-const SECONDS = 20;
+const SECONDS = 60;
 const FADE = 0.3; // Seconds for the contour to fade in, out or across.
 const vert = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
@@ -83,7 +83,7 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
     // does not appear in one frame. With reduced motion it shows at once.
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     canvas.style.opacity = '0';
-    if (!still) canvas.style.transition = 'opacity 0.4s ease-out';
+    if (!still) canvas.style.transition = 'opacity 1s ease-out';
     mount.appendChild(canvas);
     // The dots and lines clear the page text, as the face shader does.
     const { contentMask, tightMask, drawMask } = contentMasks(canvas);
