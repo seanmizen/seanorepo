@@ -2,8 +2,12 @@ import { type City, cellDist, mulberry32, type Rng } from './gen.ts';
 import { csr, dijkstra, evaluate, type Graph, gridEdges } from './graph.ts';
 import type { Params } from './params.ts';
 
+// shape: the generator that made the line (a key of SHAPES), or 'join'.
+// loop: the last stop connects to the first stop. segs then has one entry per stop.
 export type Line = {
   tier: string;
+  shape: string;
+  loop: boolean;
   path: number[];
   stops: number[];
   segs: number[];
@@ -46,8 +50,23 @@ function route(city: City, a: number, b: number) {
   return path;
 }
 
+// The path through each of the ways, in order, on the cheapest route between each pair.
+// "at" holds the path index of each way after the first. Null if a part has no route.
+function through(city: City, ways: number[]) {
+  const path = [ways[0]];
+  const at = new Set<number>();
+  for (let k = 1; k < ways.length; k++) {
+    const part = route(city, ways[k - 1], ways[k]);
+    if (!part) return null;
+    path.push(...part.slice(1));
+    at.add(path.length - 1);
+  }
+  return { path, at };
+}
+
 // Stops at the tier spacing, on land only. The last stop is the end of the path.
 // If "at" is given, the stops are at those path indices only.
+// A loop path ends at its first cell. That last stop is removed, and its segment closes the loop.
 // A new station costs t.station. A stop at a station in "have" costs p.interchange of that.
 // The cost is fixed when the line is made. It does not change when other lines change.
 function makeLine(
@@ -56,6 +75,8 @@ function makeLine(
   tier: string,
   path: number[],
   have: Set<number>,
+  shape: string,
+  loop: boolean,
   at?: Set<number>,
 ): Line {
   const t = p.tierDefs[tier];
@@ -83,10 +104,12 @@ function makeLine(
       since = 0;
     }
   }
+  if (loop) stops.pop();
   let stations = 0;
   for (const c of stops)
     stations += have.has(c) ? t.station * p.interchange : t.station;
-  return { tier, path, stops, segs, cost: (cost / 1000) * t.cost + stations };
+  const total = (cost / 1000) * t.cost + stations;
+  return { tier, shape, loop, path, stops, segs, cost: total };
 }
 
 // The line with each stop moved to the nearest station within snap x spacing.
@@ -105,16 +128,11 @@ function snapped(city: City, p: Params, l: Line, have: Set<number>) {
     moved ||= best !== s;
     if (best !== ways[ways.length - 1]) ways.push(best);
   }
-  if (!moved || ways.length < 2) return null;
-  const path = [ways[0]];
-  const at = new Set<number>();
-  for (let k = 1; k < ways.length; k++) {
-    const part = route(city, ways[k - 1], ways[k]);
-    if (!part) return null;
-    path.push(...part.slice(1));
-    at.add(path.length - 1);
-  }
-  return makeLine(city, p, l.tier, path, have, at);
+  if (!moved || ways.length < (l.loop ? 3 : 2)) return null;
+  if (l.loop && ways[ways.length - 1] !== ways[0]) ways.push(ways[0]);
+  const t = through(city, ways);
+  if (!t) return null;
+  return makeLine(city, p, l.tier, t.path, have, l.shape, l.loop, t.at);
 }
 
 const cdfCache = new WeakMap<Float32Array, Float64Array>();
@@ -138,7 +156,131 @@ function sample(a: Float32Array, r: number) {
 const add = (net: Net, l: Line): Net => ({ lines: [...net.lines, l] });
 const last = (net: Net) => net.lines[net.lines.length - 1];
 
-// The network with one more random line, from a home-weighted cell to a job-weighted cell.
+// The turn at b in degrees, from the direction a to b to the direction b to c.
+// 0 is straight on. 180 is a full reverse.
+export function turnAt(w: number, a: number, b: number, c: number) {
+  const [ux, uy] = [(b % w) - (a % w), Math.floor(b / w) - Math.floor(a / w)];
+  const [vx, vy] = [(c % w) - (b % w), Math.floor(c / w) - Math.floor(b / w)];
+  return (
+    (Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)) * 180) / Math.PI
+  );
+}
+
+// The jobs-weighted mean position, as [x, y] in cells.
+const centreCache = new WeakMap<City, [number, number]>();
+export function centre(city: City): [number, number] {
+  let m = centreCache.get(city);
+  if (!m) {
+    let [x, y] = [0, 0];
+    city.jobs.forEach((j, i) => {
+      x += j * (i % city.w);
+      y += j * Math.floor(i / city.w);
+    });
+    m = [x, y];
+    centreCache.set(city, m);
+  }
+  return m;
+}
+
+// The land cell with the most homes within 2 cells of (x, y). -1 if there is no land cell.
+function homeNear(city: City, x: number, y: number) {
+  const { w } = city;
+  let best = -1;
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -2; dx <= 2; dx++) {
+      const [cx, cy] = [Math.round(x) + dx, Math.round(y) + dy];
+      if (cx < 0 || cy < 0 || cx >= w || cy >= w) continue;
+      const c = cy * w + cx;
+      if (!city.water[c] && (best < 0 || city.pop[c] > city.pop[best]))
+        best = c;
+    }
+  return best;
+}
+
+// A line through the ways. The routed length must be from minKm to 2 x maxKm.
+function routed(
+  city: City,
+  p: Params,
+  tier: string,
+  ways: number[],
+  have: Set<number>,
+  shape: string,
+  loop = false,
+) {
+  const t = p.tierDefs[tier];
+  const r = through(city, ways);
+  if (!r) return null;
+  let m = 0;
+  for (let k = 1; k < r.path.length; k++)
+    m += cellDist(r.path[k - 1], r.path[k], city.w) * city.cellM;
+  if (m / 1000 < t.minKm || m / 1000 > 2 * t.maxKm) return null;
+  return makeLine(city, p, tier, r.path, have, shape, loop);
+}
+
+// Line shapes. Each makes one random line of the tier, or null if the try fails.
+// Add one: write the function, add it here, use it in the shapes parameter.
+type Shape = (
+  city: City,
+  p: Params,
+  rng: Rng,
+  tier: string,
+  have: Set<number>,
+) => Line | null;
+export const SHAPES: Record<string, Shape> = {
+  // From a home-weighted cell A to a job-weighted cell B. The check is on the distance from A to B.
+  line: (city, p, rng, tier, have) => {
+    const t = p.tierDefs[tier];
+    const a = sample(city.pop, rng());
+    const b = sample(city.jobs, rng());
+    const km = (cellDist(a, b, city.w) * city.cellM) / 1000;
+    if (km < t.minKm || km > t.maxKm) return null;
+    const path = route(city, a, b);
+    return path && makeLine(city, p, tier, path, have, 'line', false);
+  },
+  // Home A, then job V, then home B. The turn at V, from A to B, is at most p.turn.
+  via: (city, p, rng, tier, have) => {
+    const a = sample(city.pop, rng());
+    const v = sample(city.jobs, rng());
+    const b = sample(city.pop, rng());
+    if (turnAt(city.w, a, v, b) > p.turn) return null;
+    return routed(city, p, tier, [a, v, b], have, 'via');
+  },
+  // Part of a circle around the jobs centre, through a home-weighted cell, radius 3 km or more.
+  // It spans 90 to 360 degrees. A via point every 30 degrees moves to the cell with most homes near it.
+  // 360 degrees makes a loop.
+  arc: (city, p, rng, tier, have) => {
+    const { w } = city;
+    const [cx, cy] = centre(city);
+    const h = sample(city.pop, rng());
+    const [hx, hy] = [h % w, Math.floor(h / w)];
+    const r = Math.max(Math.hypot(hx - cx, hy - cy), 3000 / city.cellM);
+    const a0 = Math.atan2(hy - cy, hx - cx);
+    const steps = 3 + Math.floor(rng() * 10);
+    const loop = steps === 12;
+    const ways: number[] = [];
+    for (let k = 0; k <= (loop ? 11 : steps); k++) {
+      const a = a0 + (k * Math.PI) / 6;
+      const c = homeNear(city, cx + r * Math.cos(a), cy + r * Math.sin(a));
+      if (c < 0) return null;
+      if (c !== ways[ways.length - 1]) ways.push(c);
+    }
+    if (loop && ways[ways.length - 1] !== ways[0]) ways.push(ways[0]);
+    return routed(city, p, tier, ways, have, 'arc', loop);
+  },
+};
+
+// A shape name, picked by weight. One shape uses no random number.
+function pick(shapes: [string, number][], rng: Rng) {
+  if (shapes.length === 1) return shapes[0][0];
+  let r = rng() * shapes.reduce((s, [, x]) => s + x, 0);
+  for (const [name, x] of shapes) {
+    r -= x;
+    if (r < 0) return name;
+  }
+  return shapes[shapes.length - 1][0];
+}
+
+// The network with one more random line of a random tier and shape.
 // The line fits in the budget left. The new line is the last line.
 // If snap > 0, a snapped variant is made too. The one with more gain per cost is kept.
 function candidate(c: Ctx, net: Net, left: number): Net | null {
@@ -146,14 +288,8 @@ function candidate(c: Ctx, net: Net, left: number): Net | null {
   const have = new Set(net.lines.flatMap((l) => l.stops));
   for (let tries = 0; tries < 20; tries++) {
     const tier = p.tiers[Math.floor(rng() * p.tiers.length)];
-    const t = p.tierDefs[tier];
-    const a = sample(city.pop, rng());
-    const b = sample(city.jobs, rng());
-    const km = (cellDist(a, b, city.w) * city.cellM) / 1000;
-    if (km < t.minKm || km > t.maxKm) continue;
-    const path = route(city, a, b);
-    if (!path) continue;
-    const plain = makeLine(city, p, tier, path, have);
+    const plain = SHAPES[pick(p.shapes, rng)](city, p, rng, tier, have);
+    if (!plain) continue;
     const ns = [plain, p.snap > 0 ? snapped(city, p, plain, have) : null]
       .filter((l): l is Line => !!l && l.cost <= left && l.stops.length > 1)
       .map((l) => add(net, l));
@@ -165,6 +301,52 @@ function candidate(c: Ctx, net: Net, left: number): Net | null {
     return gain(ns[1]) > gain(ns[0]) ? ns[1] : ns[0];
   }
   return null;
+}
+
+const flip = (l: Line): Line => ({
+  ...l,
+  path: [...l.path].reverse(),
+  stops: [...l.stops].reverse(),
+  segs: [...l.segs].reverse(),
+});
+
+// The network with two lines merged into one, or null if no two lines can merge.
+// Two lines can merge if they have the same tier and an end of one is an end of the other.
+// The turn at that station must be at most p.turn. The merged line stops there once.
+// The later line paid the interchange price for that station, so the merged cost is less by that price.
+// A merge never lowers J in this model. A through trip skips one alight and one board,
+// and no other ride or walk changes. So anneal accepts nearly every merge.
+function merged(c: Ctx, net: Net): Net | null {
+  const { city, p, rng } = c;
+  const ok: [Line, Line, number, number][] = [];
+  const both = net.lines.map((l) => [l, flip(l)]);
+  for (let i = 0; i < net.lines.length; i++)
+    for (let j = i + 1; j < net.lines.length; j++) {
+      const [x, y] = [net.lines[i], net.lines[j]];
+      if (x.tier !== y.tier || x.loop || y.loop) continue;
+      // a: line i with the shared end last. b: line j with the shared end first.
+      for (const a of both[i])
+        for (const b of both[j]) {
+          const [sa, sb] = [a.stops, b.stops];
+          if (sa[sa.length - 1] !== sb[0] || sa.length < 2 || sb.length < 2)
+            continue;
+          if (turnAt(city.w, sa[sa.length - 2], sb[0], sb[1]) <= p.turn)
+            ok.push([a, b, i, j]);
+        }
+    }
+  if (!ok.length) return null;
+  const [a, b, i, j] = ok[Math.floor(rng() * ok.length)];
+  const t = p.tierDefs[a.tier];
+  const line: Line = {
+    tier: a.tier,
+    shape: 'join',
+    loop: false,
+    path: [...a.path, ...b.path.slice(1)],
+    stops: [...a.stops, ...b.stops.slice(1)],
+    segs: [...a.segs, ...b.segs],
+    cost: a.cost + b.cost - t.station * p.interchange,
+  };
+  return add({ lines: net.lines.filter((_, k) => k !== i && k !== j) }, line);
 }
 
 export const spent = (net: Net) => net.lines.reduce((s, l) => s + l.cost, 0);
@@ -190,14 +372,17 @@ export const ALGOS: Record<string, Algo> = {
     }
     return best;
   },
-  // Add, remove or replace one line. Sometimes keep a worse network, less often as the run continues.
+  // Merge two lines (share p.join of moves), or add, remove or replace one line.
+  // Sometimes keep a worse network, less often as the run continues.
   anneal: (net, c) => {
     const r = c.rng();
     const k = Math.floor(c.rng() * net.lines.length);
+    const m = (r - c.p.join) / (1 - c.p.join);
     let n2: Net = net;
-    if (r < 0.4 || !net.lines.length)
+    if (r < c.p.join) n2 = merged(c, net) ?? net;
+    else if (m < 0.4 || !net.lines.length)
       n2 = candidate(c, net, c.p.budget - spent(net)) ?? net;
-    else if (r < 0.7) n2 = without(net, k);
+    else if (m < 0.7) n2 = without(net, k);
     else {
       const rest = without(net, k);
       n2 = candidate(c, rest, c.p.budget - spent(rest)) ?? net;

@@ -158,7 +158,14 @@ function transitGraph(city: City, net: Net, p: Params): Graph {
         add(id + k, id + k - 1, r);
       }
     });
-    id += l.stops.length;
+    // A loop rides from the last stop to the first stop on its last segment.
+    const n = l.stops.length;
+    if (l.loop && n > 2) {
+      const r = ride(l.segs[n - 1], t);
+      add(id + n - 1, id, r);
+      add(id, id + n - 1, r);
+    }
+    id += n;
   }
   return csr(id, e);
 }
