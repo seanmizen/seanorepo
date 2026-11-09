@@ -23,7 +23,7 @@ void main() {
   vec2 g = uv * cells;
   vec4 c = texelFetch(city, ivec2((floor(g) + 0.5) * TEXELS / cells), 0);
   float halfAt = c.g * 255.0;
-  float r = c.r * (halfAt > 254.5 ? 1.0 : exp2(-0.5 * t * steps / halfAt));
+  float r = c.r * (halfAt > 254.5 ? 1.0 : exp2(-0.5 * min(t / 0.9, 1.0) * steps / halfAt));
   float cellPx = side / cells;
   float a = 0.22 * clamp(0.45 * r * cellPx - length(fract(g) - 0.5) * cellPx, 0.0, 1.0);
   vec2 at = gl_FragCoord.xy / res;
