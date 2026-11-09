@@ -197,3 +197,8 @@ import {
   to = cloudflare_dns_record.seanmizen_com_demo_crm_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/965d8f8e9554b516dfa0d14db5802261"
 }
+
+import {
+  to = cloudflare_dns_record.seanmizen_com_thirty_cname
+  id = "428a9a9f5e22c95bc7e67faa7d5ab942/c474c2e74e270af9eceaedf70b99ebad"
+}
