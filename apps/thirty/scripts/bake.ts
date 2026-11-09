@@ -2,12 +2,13 @@
 // Why: the seanmizen.com background plays back thirty cities. A visitor's device must not run the
 // simulation, so this script runs each URL in bake.json once and writes the result into
 // apps/seanmizen.com/public/thirty: {n}.bin.gz and index.json.
-// Each city is 256 x 256 texels of RGBA8, gzipped. A texel shows the city cell under it.
+// Each city file is gzipped. It starts with 256 x 256 texels of RG8. A texel shows the city cell under it.
 // R: unmet demand at step 0, as sqrt(unmet / most) x 255, so a dot's area follows the demand.
 // most is the 99th percentile of the cells with demand. R is at most 255.
 // G: the step at which the unmet demand of the cell falls below half of its start value. 255: never.
-// B: distance from the texel centre to the nearest drawn line, in texels, x 255 / RANGE.
-// A: the step at which that line appears. 255: no line within RANGE.
+// Then the lines of the last step, as Uint16 values: for each line, the step at which it appears,
+// its point count n, then n points x, y. A point is in the tube-map layout, from 0 to 65535 across
+// the square city. index.json gives the unzipped size in bytes.
 // The output is the same bytes on each run: a fixed gzip level and a fixed gzip header.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -19,7 +20,7 @@ import { parse } from '../src/params.ts';
 
 const T = 256; // Texels on a side.
 const S = 256; // Job samples in each score, the same as the page's display snapshot.
-const RANGE = 4; // The largest distance in B, in texels.
+const SIDE = 400; // One line width on the tube map is 1 / SIDE of the city side.
 const out = new URL('../../seanmizen.com/public/thirty/', import.meta.url);
 const urls: string[] = JSON.parse(
   readFileSync(new URL('../bake.json', import.meta.url), 'utf8'),
@@ -62,73 +63,63 @@ const index = urls.map((qs, n) => {
     while (k > 0 && has[k - 1].has(key(l))) k--;
     return k;
   });
-  const f = T / w; // Texels per cell.
+  // The layout is in units of the city side, so a point is in 0 to 1.
   const at = (c: number): Pt => [
-    ((c % w) + 0.5) * f,
-    (Math.floor(c / w) + 0.5) * f,
+    ((c % w) + 0.5) / w,
+    (Math.floor(c / w) + 0.5) / w,
   ];
-  // One line width, in texels. The texture cannot show two lines less than about 2 texels apart,
-  // so lines that share cells draw as one bundle, a little wider than one line.
-  const u = 0.08;
   const { pts } = layout(
     last.map((l) => ({ ...l, path: tubePath(l, w) })),
     at,
-    () => u,
-    0.6 * u,
+    () => 1 / SIDE,
+    0.6 / SIDE,
   );
 
-  const px = new Uint8Array(T * T * 4);
-  const dist = new Float32Array(T * T).fill(RANGE);
+  const f = T / w; // Texels per cell.
+  const tex = new Uint8Array(T * T * 2);
   for (let i = 0; i < T * T; i++) {
     const c =
       Math.floor((Math.floor(i / T) + 0.5) / f) * w +
       Math.floor(((i % T) + 0.5) / f);
-    px.set(
-      [
-        Math.round(255 * Math.min(1, Math.sqrt(unmet[0][c] / most))),
-        half[c],
-        255,
-        255,
-      ],
-      4 * i,
-    );
+    tex[2 * i] = Math.round(255 * Math.min(1, Math.sqrt(unmet[0][c] / most)));
+    tex[2 * i + 1] = half[c];
   }
-  pts.forEach((q, j) => {
-    for (let k = 1; k < q.length; k++) {
-      const [[ax, ay], [bx, by]] = [q[k - 1], q[k]];
-      const len2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1;
-      const lo = (a: number, b: number) =>
-        Math.max(0, Math.floor(Math.min(a, b) - RANGE));
-      const hi = (a: number, b: number) =>
-        Math.min(T - 1, Math.ceil(Math.max(a, b) + RANGE));
-      for (let y = lo(ay, by); y <= hi(ay, by); y++)
-        for (let x = lo(ax, bx); x <= hi(ax, bx); x++) {
-          const [cx, cy] = [x + 0.5, y + 0.5];
-          const t = Math.min(
-            1,
-            Math.max(0, ((cx - ax) * (bx - ax) + (cy - ay) * (by - ay)) / len2),
-          );
-          const d = Math.hypot(
-            ax + t * (bx - ax) - cx,
-            ay + t * (by - ay) - cy,
-          );
-          const i = y * T + x;
-          if (d >= dist[i]) continue;
-          dist[i] = d;
-          px[4 * i + 2] = Math.round((255 * d) / RANGE);
-          px[4 * i + 3] = appear[j];
-        }
-    }
+  // Keep only the corners: remove a point at the same place as the one before it, and a point
+  // where the line goes straight on. Keep the tip where a line turns back on itself.
+  const q16 = (v: number) => Math.round(65535 * Math.min(1, Math.max(0, v)));
+  const lines = pts.flatMap((q, j) => {
+    const p = q
+      .map(([x, y]) => [q16(x), q16(y)])
+      .filter(([x, y], k, a) => !k || x !== a[k - 1][0] || y !== a[k - 1][1]);
+    const keep = p.filter(([x, y], k) => {
+      if (k === 0 || k === p.length - 1) return true;
+      const [ax, ay] = [x - p[k - 1][0], y - p[k - 1][1]];
+      const [bx, by] = [p[k + 1][0] - x, p[k + 1][1] - y];
+      const cross = Math.abs(ax * by - ay * bx) / Math.hypot(bx, by);
+      return cross > 1 || ax * bx + ay * by <= 0;
+    });
+    return keep.length < 2 ? [] : [appear[j], keep.length, ...keep.flat()];
   });
+  const raw = new Uint8Array(tex.length + 2 * lines.length);
+  raw.set(tex);
+  const view = new DataView(raw.buffer);
+  for (const [k, v] of lines.entries())
+    view.setUint16(tex.length + 2 * k, v, true);
 
-  const gz = gzipSync(px, { level: 9 });
+  const gz = gzipSync(raw, { level: 9 });
   gz[9] = 255; // The OS byte of the header: unknown, so each machine writes the same bytes.
   writeFileSync(new URL(`${n}.bin.gz`, out), gz);
   bytes += gz.length;
   console.log(
-    `${n}.bin.gz ${gz.length} bytes, ${steps} steps, ${last.length} lines: ${qs}`,
+    `${n}.bin.gz ${gz.length} bytes, ${steps} steps, ${last.length} lines, ${lines.length} values: ${qs}`,
   );
-  return { file: `${n}.bin.gz`, url: qs, size: w, steps };
+  return {
+    file: `${n}.bin.gz`,
+    url: qs,
+    size: w,
+    steps,
+    bytes: raw.length,
+  };
 });
 writeFileSync(
   new URL('index.json', out),
