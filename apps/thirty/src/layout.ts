@@ -34,9 +34,11 @@ export function tubePath(l: Pick<Line, 'stops' | 'loop'>, w: number) {
 
 // Tube-map layout. Each straight run of a line (its cell steps from one corner to the next) has one
 // offset from the cell centres, so a line never shifts sideways between corners. Runs are placed
-// longest first. A run on free cells gets offset 0. A later run gets the offset nearest 0, on the
-// side it enters from, that clears every placed run on any of its cells. Two lines touch if they
-// share a station anywhere. Otherwise a gap separates them. An offset is along the normal of the
+// longest first. A run on free cells gets offset 0. A later run gets the offset nearest 0 that
+// clears every placed run on any of its cells. Its side keeps its order against the lines that
+// share its placed neighbouring runs, as on the tube map. With no such line, the side it enters
+// from decides. Two lines touch if they share a station anywhere. Otherwise a gap separates them.
+// An offset is along the normal of the
 // step from its low cell to its high cell, so runs in opposite directions on the same cells agree.
 // Each station point sits on the line that stops there, so a line that passes a station shows no stop.
 export function layout(
@@ -69,6 +71,16 @@ export function layout(
   });
   // off[i][k] is the offset of line i on the step from path[k - 1] to path[k].
   const off = lines.map((l) => l.path.map(() => 0));
+  const done = lines.map((l) => l.path.map(() => false));
+  // The lines on each cell step.
+  const users = new Map<string, Set<number>>();
+  lines.forEach(({ path: p }, i) => {
+    for (let k = 1; k < p.length; k++)
+      users.set(
+        key(p[k - 1], p[k]),
+        (users.get(key(p[k - 1], p[k])) ?? new Set()).add(i),
+      );
+  });
   const placed = new Map<string, { i: number; o: number }[]>();
   runs.sort((x, y) => y.b - y.a - (x.b - x.a));
   for (const { i, a, b } of runs) {
@@ -90,14 +102,49 @@ export function layout(
     const [x, y] = at(p[a]);
     const [px, py] = a > 0 ? at(p[a - 1]) : [x, y];
     const side = (px - x) * nx + (py - y) * ny < 0 ? -1 : 1;
+    // Lines that share this run and the nearest placed step of this line before or after it,
+    // and every step between, keep their order (left or right of travel) through the corners.
+    // Each entry [q, s, g] asks for (q - o) * s > 0, and better (q - o) * s >= g, the space
+    // between the two lines on the placed step, so lines placed later still fit between them.
+    const order: number[][] = [];
+    const step = (k: number) => key(p[k - 1], p[k]);
+    const turn = (k: number) => Math.sign(p[k] - p[k - 1]);
+    for (const [k2, d] of [
+      [a + 1, -1],
+      [b, 1],
+    ]) {
+      let k1 = k2 + d;
+      while (k1 > 0 && k1 < p.length && !done[i][k1]) k1 += d;
+      if (k1 <= 0 || k1 >= p.length) continue;
+      for (const q of placed.get(step(k1)) ?? []) {
+        const r = placed.get(step(k2))?.find((z) => z.i === q.i);
+        let along = q.i !== i && r !== undefined;
+        for (let k = k1 - d; along && k !== k2; k -= d)
+          along = users.get(step(k))?.has(q.i) === true;
+        if (r && along)
+          order.push([
+            r.o,
+            Math.sign(q.o - off[i][k1]) * turn(k1) * turn(k2),
+            Math.abs(q.o - off[i][k1]),
+          ]);
+      }
+    }
+    // The side it enters from decides only when no order is at stake.
+    const cost = (v: number) =>
+      4 * order.filter(([q, s]) => (q - v) * s <= 0).length +
+      2 * order.filter(([q, s, g]) => (q - v) * s < g - 1e-9).length +
+      (v * side < 0 ? 1 : 0);
     const o =
       own ??
-      [0, ...clear.flatMap(([q, c]) => [q - c, q + c])]
-        .filter((v) => v * side >= 0)
-        .sort((u, v) => Math.abs(u) - Math.abs(v))
-        .find((v) => clear.every(([q, c]) => Math.abs(v - q) > c - 1e-9)) ??
-      0;
+      [
+        0,
+        ...clear.flatMap(([q, c]) => [q - c, q + c]),
+        ...order.map(([q, s, g]) => q - s * g),
+      ]
+        .filter((v) => clear.every(([q, c]) => Math.abs(v - q) > c - 1e-9))
+        .sort((u, v) => cost(u) - cost(v) || Math.abs(u) - Math.abs(v))[0];
     for (let k = a + 1; k <= b; k++) {
+      done[i][k] = true;
       off[i][k] = o;
       const list = placed.get(key(p[k - 1], p[k])) ?? [];
       list.push({ i, o });
