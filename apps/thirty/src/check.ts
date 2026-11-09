@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DIFFERENT, FIXTURES, HASHES } from './fixtures.ts';
 import { fromBytes, genCity } from './gen.ts';
-import { hashNet, type Net, run, type Snap, spent } from './net.ts';
+import { spent } from './graph.ts';
+import { hashNet, type Net, run, type Snap } from './net.ts';
 import { type Params, parse } from './params.ts';
 
 export const load = (p: Params) =>

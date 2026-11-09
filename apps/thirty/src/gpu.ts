@@ -1,22 +1,26 @@
 import type { City } from './gen.ts';
-import { INF, type Prep, tenths, total } from './graph.ts';
+import { INF, jobSamples, type Prep, scoring, total } from './graph.ts';
 import type { Params } from './params.ts';
 
 // For each cell of each network: the times and G of evaluate(), as the same integers.
-// off: cell k has entries off[k] to off[k + 1]. ent: (D index of sample 0, walk time). u: cells, N.
-// S is a constant. The samples go in blocks of 32, so the times of one block fit in registers for any S.
+// off: cell k has entries off[k] to off[k + 1]. ent: (D index of sample 0, walk time). u: cells.
+// cell: the city cell of cell k. tab: the sample cells (S), dem (T) and fare (W x W) of scoring().
+// S, T and W are constants. The samples go in blocks of 32, so the times of one block fit in registers for any S.
 const WGSL = /* wgsl */ `
 @group(0) @binding(0) var<storage, read> off: array<u32>;
 @group(0) @binding(1) var<storage, read> ent: array<vec2<u32>>;
 @group(0) @binding(2) var<storage, read> D: array<u32>;
 @group(0) @binding(3) var<storage, read_write> G: array<u32>;
 @group(0) @binding(4) var<uniform> u: vec4<u32>;
+@group(0) @binding(5) var<storage, read> cell: array<u32>;
+@group(0) @binding(6) var<storage, read> tab: array<u32>;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) nw: vec3<u32>) {
   let k = id.x + id.y * nw.x * 64u;
   if (k >= u.x) { return; }
-  let n = u.y;
+  let cx = cell[k] % W;
+  let cy = cell[k] / W;
   var g = 0u;
   for (var j0 = 0u; j0 < S; j0 += 32u) {
     let m = min(32u, S - j0);
@@ -27,7 +31,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) n
       for (var j = 0u; j < m; j++) { t[j] = min(t[j], x.y + D[x.x + j0 + j]); }
     }
     for (var j = 0u; j < m; j++) {
-      if (t[j] < 2u * n) { g += min(n, 2u * n - t[j]); }
+      if (t[j] < T) {
+        let c = tab[j0 + j];
+        let dx = max(cx, c % W) - min(cx, c % W);
+        let dy = max(cy, c / W) - min(cy, c / W);
+        g += tab[S + t[j]] * tab[S + T + dx + dy * W];
+      }
     }
   }
   G[k] = g;
@@ -40,7 +49,9 @@ const size = (x: Prep) => Math.max(x.D.byteLength, x.ent.byteLength);
 // If t is given, it adds the ms of each part to t: upload, dispatch, read.
 // Null if the browser has no WebGPU adapter.
 export async function gpu(city: City, p: Params, S: number) {
-  const N = tenths(p.N);
+  const sc = scoring(city, p, S);
+  const T = sc.dem.length;
+  const W = city.w;
   const adapter = await navigator.gpu?.requestAdapter();
   if (!adapter) return null;
   const { maxStorageBufferBindingSize, maxBufferSize } = adapter.limits;
@@ -51,9 +62,23 @@ export async function gpu(city: City, p: Params, S: number) {
   const pipe = dev.createComputePipeline({
     layout: 'auto',
     compute: {
-      module: dev.createShaderModule({ code: `const S = ${S}u;${WGSL}` }),
+      module: dev.createShaderModule({
+        code: `const S = ${S}u; const T = ${T}u; const W = ${W}u;${WGSL}`,
+      }),
     },
   });
+  const { STORAGE, UNIFORM, COPY_DST, COPY_SRC, MAP_READ } = GPUBufferUsage;
+  const tab = dev.createBuffer({
+    size: 4 * (S + T + W * W),
+    usage: STORAGE,
+    mappedAtCreation: true,
+  });
+  new Uint32Array(tab.getMappedRange()).set([
+    ...jobSamples(city, S),
+    ...sc.dem,
+    ...sc.fare,
+  ]);
+  tab.unmap();
   const one = async (ps: Prep[], t?: Record<string, number>) => {
     let last = performance.now();
     const mark = async (k: string) => {
@@ -71,17 +96,19 @@ export async function gpu(city: City, p: Params, S: number) {
       ne += x.ent.length;
       nd += x.D.length;
     }
-    const { STORAGE, UNIFORM, COPY_DST, COPY_SRC, MAP_READ } = GPUBufferUsage;
     const buf = (usage: number, n: number, mapped = false) =>
       dev.createBuffer({
         size: Math.max(16, 4 * n),
         usage,
         mappedAtCreation: mapped,
       });
-    const bufs = [nc + 1, ne, nd].map((n) => buf(STORAGE, n, true));
-    const [off, ent, D] = bufs.map((b) => new Uint32Array(b.getMappedRange()));
+    const bufs = [nc + 1, ne, nd, nc].map((n) => buf(STORAGE, n, true));
+    const [off, ent, D, cell] = bufs.map(
+      (b) => new Uint32Array(b.getMappedRange()),
+    );
     [nc, ne, nd] = [0, 0, 0];
     for (const x of ps) {
+      cell.set(x.cells, nc);
       for (let k = 1; k <= x.cells.length; k++) off[nc + k] = ne / 2 + x.off[k];
       for (let k = 0; k < x.ent.length; k += 2) {
         ent[ne + k] = nd + x.ent[k];
@@ -93,8 +120,8 @@ export async function gpu(city: City, p: Params, S: number) {
       nd += x.D.length;
     }
     for (const b of bufs) b.unmap();
-    bufs.push(buf(STORAGE | COPY_SRC, nc), buf(UNIFORM | COPY_DST, 4));
-    dev.queue.writeBuffer(bufs[4], 0, new Uint32Array([nc, N, 0, 0]));
+    const [G, U] = [buf(STORAGE | COPY_SRC, nc), buf(UNIFORM | COPY_DST, 4)];
+    dev.queue.writeBuffer(U, 0, new Uint32Array([nc, 0, 0, 0]));
     const read = buf(MAP_READ | COPY_DST, nc);
     await mark('upload');
     const enc = dev.createCommandEncoder();
@@ -104,10 +131,9 @@ export async function gpu(city: City, p: Params, S: number) {
       0,
       dev.createBindGroup({
         layout: pipe.getBindGroupLayout(0),
-        entries: bufs.map((buffer, binding) => ({
-          binding,
-          resource: { buffer },
-        })),
+        entries: [bufs[0], bufs[1], bufs[2], G, U, bufs[3], tab].map(
+          (buffer, binding) => ({ binding, resource: { buffer } }),
+        ),
       }),
     );
     // At most 65535 workgroups on each axis.
@@ -118,15 +144,15 @@ export async function gpu(city: City, p: Params, S: number) {
     dev.queue.submit([enc.finish()]);
     await mark('dispatch');
     const copy = dev.createCommandEncoder();
-    copy.copyBufferToBuffer(bufs[3], 0, read, 0, 4 * nc);
+    copy.copyBufferToBuffer(G, 0, read, 0, 4 * nc);
     dev.queue.submit([copy.finish()]);
     await read.mapAsync(GPUMapMode.READ);
-    const G = new Uint32Array(read.getMappedRange().slice(0, 4 * nc));
-    for (const b of [...bufs, read]) b.destroy();
+    const out = new Uint32Array(read.getMappedRange().slice(0, 4 * nc));
+    for (const b of [...bufs, G, U, read]) b.destroy();
     let c = 0;
     const J = ps.map((x) => {
       c += x.cells.length;
-      return total(city, x.cells, G.subarray(c - x.cells.length, c), S, N);
+      return total(city, sc, x, out.subarray(c - x.cells.length, c), S);
     });
     await mark('read');
     return J;

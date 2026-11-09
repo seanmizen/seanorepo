@@ -6,6 +6,7 @@ import {
   type Graph,
   gridEdges,
   samples,
+  spent,
 } from './graph.ts';
 import type { Params } from './params.ts';
 
@@ -251,6 +252,15 @@ export const SHAPES: Record<string, Shape> = {
     const path = route(city, a, b);
     return path && makeLine(city, p, tier, path, have, 'line', false);
   },
+  // From a home-weighted cell A to a home-weighted cell B, at least minKm apart. No longest length.
+  link: (city, p, rng, tier, have) => {
+    const a = sample(city.pop, rng());
+    const b = sample(city.pop, rng());
+    const km = (cellDist(a, b, city.w) * city.cellM) / 1000;
+    if (km < p.tierDefs[tier].minKm) return null;
+    const path = route(city, a, b);
+    return path && makeLine(city, p, tier, path, have, 'link', false);
+  },
   // Home A, then job V, then home B. The turn at V, from A to B, is at most p.turn.
   via: (city, p, rng, tier, have) => {
     const a = sample(city.pop, rng());
@@ -312,11 +322,15 @@ function options(c: Ctx, net: Net, left: number): Net[] {
   return [];
 }
 
-// Of the options, the one with more gain per cost. Null if there is no option.
+// The gain of n over net, the network with one line less. With reach: the gain in J for each unit of cost.
+// With revenue: the gain in J. J is the profit, so the cost of the line is in J already.
+const gain = (c: Ctx, net: Net, n: Net) =>
+  (c.J(n) - c.J(net)) / (c.p.goal === 'revenue' ? 1 : last(n).cost);
+
+// Of the options, the one with more gain. Null if there is no option.
 function choose(c: Ctx, net: Net, ns: Net[]): Net | null {
   if (ns.length < 2) return ns[0] ?? null;
-  const gain = (n: Net) => (c.J(n) - c.J(net)) / last(n).cost;
-  return gain(ns[1]) > gain(ns[0]) ? ns[1] : ns[0];
+  return gain(c, net, ns[1]) > gain(c, net, ns[0]) ? ns[1] : ns[0];
 }
 
 const candidate = (c: Ctx, net: Net, left: number) =>
@@ -368,7 +382,6 @@ function merged(c: Ctx, net: Net): Net | null {
   return add({ lines: net.lines.filter((_, k) => k !== i && k !== j) }, line);
 }
 
-export const spent = (net: Net) => net.lines.reduce((s, l) => s + l.cost, 0);
 const without = (net: Net, k: number): Net => ({
   lines: net.lines.filter((_, i) => i !== k),
 });
@@ -378,21 +391,20 @@ export const ALGOS: Record<string, Algo> = {
   random: (net, c) => {
     return candidate(c, net, c.p.budget - spent(net)) ?? net;
   },
-  // Add the candidate with the best gain per cost. Adding a line never makes a trip slower.
+  // Add the candidate with the best gain, if the gain is more than 0. Adding a line never makes a trip slower.
   greedy: (net, c) => {
     const left = c.p.budget - spent(net);
     const opts = Array.from({ length: c.p.candidates }, () =>
       options(c, net, left),
     );
     const then = () => {
-      const j0 = c.J(net);
       let best = net;
-      let gain = 0;
+      let most = 0;
       for (const o of opts) {
         const n2 = choose(c, net, o);
         if (!n2) continue;
-        const g = (c.J(n2) - j0) / last(n2).cost;
-        if (g > gain) [best, gain] = [n2, g];
+        const g = gain(c, net, n2);
+        if (g > most) [best, most] = [n2, g];
       }
       return best;
     };

@@ -1,7 +1,7 @@
 import { fromBytes, genCity } from './gen.ts';
 import { gpu } from './gpu.ts';
-import { type Eval, type Prep, samples } from './graph.ts';
-import { hashNet, run, type Snap, spent } from './net.ts';
+import { type Eval, type Prep, samples, spent } from './graph.ts';
+import { hashNet, run, type Snap } from './net.ts';
 import { parse } from './params.ts';
 import { pool } from './pool.ts';
 
