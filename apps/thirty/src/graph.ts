@@ -60,6 +60,8 @@ export function gridEdges(
   return e;
 }
 
+export const spent = (net: Net) => net.lines.reduce((s, l) => s + l.cost, 0);
+
 // Times are integers in tenths of a minute. INF plus a walk time stays below 2^32.
 export const INF = 0x3fffffff;
 export const tenths = (min: number) => Math.round(min * 10);
@@ -204,7 +206,7 @@ export const samples = (city: City, p: Params) =>
 
 // S destination cells, spread evenly along the jobs CDF. No randomness.
 const sampleCache = new WeakMap<City, Map<number, number[]>>();
-function jobSamples(city: City, S: number) {
+export function jobSamples(city: City, S: number) {
   const m = sampleCache.get(city) ?? new Map<number, number[]>();
   sampleCache.set(city, m);
   let out = m.get(S);
@@ -231,6 +233,7 @@ export type Prep = {
   off: Uint32Array;
   ent: Uint32Array;
   D: Uint32Array;
+  cost: number;
 };
 let count = new Int32Array(0);
 export function prep(city: City, net: Net, p: Params, S: number): Prep {
@@ -316,24 +319,56 @@ export function prep(city: City, net: Net, p: Params, S: number): Prep {
     });
   });
   for (const c of cells) count[c] = 0;
-  return { cells: Int32Array.from(cells), off, ent, D };
+  return { cells: Int32Array.from(cells), off, ent, D, cost: spent(net) };
 }
 
-// J: the pop-weighted mean score, from G in cell order. The GPU gives the same G, so the same J.
+// The score of a trip, from the goal. The CPU and the GPU read the same integer tables, so G is the same.
+// G[k] = the sum over samples j with time t < dem.length of dem[t] x fare[|dx| + |dy| x w],
+// with (dx, dy) the cells from cell k to sample j. J = the sum of pop x G / (S x unit), less cost x price.
+// reach: dem[t] = min(N, 2N - t), to 2N. fare = 1. J is the pop-weighted mean score, 0 to 1.
+// revenue: dem[t] = 1024 x exp(-t / tau), while it is 1% or more: to tau x ln(100), 4.6 tau.
+// fare = 64 x (1 + fare x km). J is the profit: R, the fares, less spent / payback.
+export function scoring(city: City, p: Params, S: number) {
+  const { w, cellM } = city;
+  const fare = new Uint32Array(w * w).fill(1);
+  if (p.goal === 'reach') {
+    const N = tenths(p.N);
+    const dem = Uint32Array.from({ length: 2 * N }, (_, t) =>
+      Math.min(N, 2 * N - t),
+    );
+    return { dem, fare, unit: N, price: 0 };
+  }
+  const dem = Uint32Array.from(
+    { length: Math.floor(tenths(p.tau) * Math.log(100)) + 1 },
+    (_, t) => Math.round(1024 * Math.exp(-t / tenths(p.tau))),
+  );
+  for (let k = 0; k < w * w; k++)
+    fare[k] = Math.round(
+      64 * (1 + (p.fare * cellM * Math.hypot(k % w, Math.floor(k / w))) / 1000),
+    );
+  // A u32 sum of S samples must not overflow, on the CPU or the GPU.
+  if (dem[0] * fare[w * w - 1] * S >= 2 ** 32)
+    throw new Error('Parameter fare is too large for the score.');
+  return { dem, fare, unit: 1024 * 64, price: 1 / p.payback };
+}
+export type Scoring = ReturnType<typeof scoring>;
+
+// J, from G in cell order. The GPU gives the same G, so the same J.
 export function total(
   city: City,
-  cells: Int32Array,
+  sc: Scoring,
+  x: Prep,
   G: Uint32Array,
   S: number,
-  N: number,
 ) {
   let J = 0;
-  for (let k = 0; k < cells.length; k++) J += city.pop[cells[k]] * G[k];
-  return J / (S * N);
+  for (let k = 0; k < x.cells.length; k++) J += city.pop[x.cells[k]] * G[k];
+  return J / (S * sc.unit) - x.cost * sc.price;
 }
 
 export type Eval = {
   J: number;
+  R: number;
   score: Float32Array;
   within: number;
   p50: number;
@@ -342,27 +377,37 @@ export type Eval = {
 
 // time(cell, j) = the least walk + D(u, j) over the nodes u within walk of the cell. That is a direct walk
 // (the node of sample j has D = 0), or a walk to a station, a ride and a walk from a station.
-// G[k]: the sum over samples of min(N, 2N - time), and 0 from 2N. So score[c] = G / (S x N) is
-// the mean over samples of 1 within N min, falling to 0 at 2N. The GPU runs the same loop.
+// G[k] is the sum of the trip scores of scoring(). score[c] = G / (S x unit): with reach, the mean over
+// samples of 1 within N min, falling to 0 at 2N. With revenue, the fares from the cell. The GPU runs the same loop.
 export function evaluate(city: City, net: Net, p: Params, S: number): Eval {
-  const { cells, off, ent, D } = prep(city, net, p, S);
+  const x = prep(city, net, p, S);
+  const { cells, off, ent, D } = x;
+  const sc = scoring(city, p, S);
+  const { dem, fare, unit } = sc;
+  const { w } = city;
+  const smp = jobSamples(city, S);
   const N = tenths(p.N);
-  const score = new Float32Array(city.w * city.w);
+  const score = new Float32Array(w * w);
   const hist = new Float64Array(Math.ceil(N / 5));
   const G = new Uint32Array(cells.length);
   let within = 0;
   for (let k = 0; k < cells.length; k++) {
     const pop = city.pop[cells[k]] / S;
+    const [cx, cy] = [cells[k] % w, Math.floor(cells[k] / w)];
     for (let j = 0; j < S; j++) {
       let t = INF;
       for (let e = off[k]; e < off[k + 1]; e++)
         t = Math.min(t, ent[2 * e + 1] + D[ent[2 * e] + j]);
+      if (t < dem.length) {
+        const dx = Math.abs(cx - (smp[j] % w));
+        const dy = Math.abs(cy - Math.floor(smp[j] / w));
+        G[k] += dem[t] * fare[dx + dy * w];
+      }
       if (t >= 2 * N) continue;
-      G[k] += Math.min(N, 2 * N - t);
       if (t <= N) within += pop;
       hist[Math.floor(t / 10)] += pop;
     }
-    score[cells[k]] = G[k] / (S * N);
+    score[cells[k]] = G[k] / (S * unit);
   }
   const q = (f: number) => {
     let cum = 0;
@@ -372,8 +417,10 @@ export function evaluate(city: City, net: Net, p: Params, S: number): Eval {
     }
     return Number.POSITIVE_INFINITY;
   };
+  const J = total(city, sc, x, G, S);
   return {
-    J: total(city, cells, G, S, N),
+    J,
+    R: J + x.cost * sc.price,
     score,
     within,
     p50: q(0.5),

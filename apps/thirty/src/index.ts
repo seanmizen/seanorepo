@@ -9,6 +9,7 @@ type Snap = {
   total: number;
   algo: string;
   J: number;
+  R: number;
   score: Float32Array;
   within: number;
   p50: number;
@@ -26,7 +27,10 @@ const value = (k: string) => q.get(k) ?? defaultOf(k);
 const GROUPS: [string, string[]][] = [
   ['City', ['city', 'seed', 'size', 'cell', 'sea', 'rivers', 'hills', 'warp']],
   ['Run', ['algo', 'steps', 'run', 'candidates', 'gpu']],
-  ['Goal', ['N', 'walk', 'budget', 'samples']],
+  [
+    'Goal',
+    ['goal', 'N', 'walk', 'budget', 'samples', 'tau', 'fare', 'payback'],
+  ],
   ['Stations', ['interchange', 'snap']],
   ['Lines', ['shapes', 'turn', 'join']],
 ];
@@ -44,6 +48,11 @@ const HINT: Record<string, string> = {
   run: 'Seed for the algorithm.',
   candidates: 'Candidate lines for each greedy step.',
   N: 'Target trip time in minutes.',
+  goal: 'reach: the share of jobs within N min. revenue: the profit, fares less the cost of the network.',
+  tau: 'revenue: minutes for the trips to fall by a factor of e. Trips under 1% (after 4.6 tau) earn 0.',
+  fare: 'revenue: fare for each km of straight line, relative to a base fare of 1.',
+  payback:
+    'revenue: cost units for each unit of fares. More is a cheaper network.',
   walk: 'Longest walk leg in minutes: to a station, from a station, between stations, or the whole trip. 0: the same as N.',
   gpu: '1: score on the GPU if the browser has WebGPU. 0: on the CPU. The result is the same.',
   budget: 'Total cost of track and stations.',
@@ -52,7 +61,7 @@ const HINT: Record<string, string> = {
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
   shapes:
-    'Candidate shapes and their weights: line, via, arc. Example: line:1,via:1,arc:1.',
+    'Candidate shapes and their weights: line, via, arc, link. Example: line:1,via:1,arc:1.',
   turn: 'Largest turn in degrees at a via point or a join station. 180: no limit.',
   join: 'Share of anneal moves that merge two lines with a shared end station.',
 };
@@ -292,16 +301,19 @@ try {
 } catch {
   // The worker reports the error.
 }
+const revenue = params?.goal === 'revenue';
 
 function drawKey(max: number, s: Snap) {
   const rgb = (c: number[]) => `rgb(${c.join(',')})`;
   const N = params?.N ?? DEFAULTS.N;
   const label = {
-    score: [
-      `0% of jobs within ${N} min`,
-      '100%',
-      `Fades to 0 at ${2 * N} min.`,
-    ],
+    score: revenue
+      ? [
+          'no fares',
+          `${max.toFixed(2)}`,
+          'Fares for each home. Square-root scale.',
+        ]
+      : [`0% of jobs within ${N} min`, '100%', `Fades to 0 at ${2 * N} min.`],
     pop: ['few homes', 'many', 'Square-root scale.'],
     jobs: ['few jobs', 'many', 'Square-root scale.'],
     height: ['0 m', `${max.toFixed(0)} m`, 'Square-root scale.'],
@@ -356,9 +368,11 @@ function drawMap(s: Snap) {
       ? water[i] === 1
         ? SEA
         : RIVER
-      : ramp(layer.value === 'score' ? vals[i] : Math.sqrt(vals[i] / max)).map(
-          (c) => c * shade,
-        );
+      : ramp(
+          layer.value === 'score' && !revenue
+            ? vals[i]
+            : Math.sqrt(vals[i] / max),
+        ).map((c) => c * shade);
     img.data.set([...rgb, 255], i * 4);
   }
   map = new OffscreenCanvas(w, w);
@@ -552,7 +566,7 @@ function draw() {
       }
     }
   }
-  stats.textContent = `Step ${s.step}/${s.total} ${s.algo} · jobs within ${s.N} min: ${(s.within * 100).toFixed(1)}% · P50 ${fmt(s.p50, s.N)} · P95 ${fmt(s.p95, s.N)} · J ${s.J.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget} · ${s.lines.length} lines · hash ${s.hash} · ${((w * cellM) / 1000).toFixed(0)} km across`;
+  stats.textContent = `Step ${s.step}/${s.total} ${s.algo} · jobs within ${s.N} min: ${(s.within * 100).toFixed(1)}% · P50 ${fmt(s.p50, s.N)} · P95 ${fmt(s.p95, s.N)} · ${revenue ? `R ${s.R.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget} (${(s.cost / (params?.payback ?? 1)).toFixed(4)} in R) · profit ${s.J.toFixed(4)}` : `J ${s.J.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget}`} · ${s.lines.length} lines · hash ${s.hash} · ${((w * cellM) / 1000).toFixed(0)} km across`;
 }
 
 fit();

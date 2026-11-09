@@ -74,6 +74,10 @@ export const DEFAULTS = {
   N: 30,
   walk: 0, // longest walk leg in minutes. 0: the same as N
   samples: 32, // job samples in J, at most the cells with jobs
+  goal: 'reach', // the score: reach, or revenue (fares less the cost of the network)
+  tau: 30, // revenue: minutes for demand to fall by a factor of e
+  fare: 0.2, // revenue: fare for each km, relative to a base fare of 1
+  payback: 3000, // revenue: cost units for each unit of R
   budget: 1500,
   candidates: 12,
   interchange: 0.25, // share of station cost to stop where a station exists
@@ -135,6 +139,8 @@ export function parse(qs: string): Params {
       if (!SHAPES[a]) throw new Error(`Unknown shape: ${a}.`);
       return [a, w ? num('shapes', w) : 1];
     });
+  if (out.goal !== 'reach' && out.goal !== 'revenue')
+    throw new Error(`Unknown goal: ${out.goal}.`);
   const walk = (out.walk as number) || (out.N as number);
   return { ...(out as typeof DEFAULTS), walk, tiers, shapes, chain, tierDefs };
 }
