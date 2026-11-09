@@ -4,139 +4,179 @@
     "url": "?city=london&algo=greedy&steps=30",
     "size": 256,
     "steps": 30,
-    "bytes": 132472
+    "bytes": 133728,
+    "graph": 132472,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "1.bin.gz",
     "url": "?city=london&algo=greedy:30,anneal:200&shapes=line:1,via:1,arc:1&join=0.3&snap=0.5&tram.station=2&tube.station=20&rer.station=15&express.station=25&budget=4000",
     "size": 256,
     "steps": 230,
-    "bytes": 132716
+    "bytes": 134040,
+    "graph": 132716,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "2.bin.gz",
     "url": "?city=london&goal=revenue&shapes=line:1,link:1&tau=90&budget=3000",
     "size": 256,
     "steps": 30,
-    "bytes": 133712
+    "bytes": 137344,
+    "graph": 133712,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "3.bin.gz",
     "url": "?city=london&tiers=tube,express&algo=greedy:30,anneal:60&budget=3000",
     "size": 256,
     "steps": 90,
-    "bytes": 132828
+    "bytes": 134508,
+    "graph": 132828,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "4.bin.gz",
     "url": "?city=london&algo=greedy&steps=60&budget=4000&shapes=line:1,arc:1&N=45",
     "size": 256,
     "steps": 60,
-    "bytes": 134252
+    "bytes": 137000,
+    "graph": 134252,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "5.bin.gz",
     "url": "?city=london&tiers=tram&algo=greedy&steps=60&budget=2000",
     "size": 256,
     "steps": 60,
-    "bytes": 133456
+    "bytes": 136528,
+    "graph": 133456,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "6.bin.gz",
     "url": "?city=london&tiers=rer,express&algo=greedy&steps=40&budget=3000",
     "size": 256,
     "steps": 40,
-    "bytes": 133188
+    "bytes": 134668,
+    "graph": 133188,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "7.bin.gz",
     "url": "?city=london&goal=revenue&tau=60&fare=0.5&shapes=line:1,via:1,arc:1,link:1&budget=3000",
     "size": 256,
     "steps": 30,
-    "bytes": 133804
+    "bytes": 136748,
+    "graph": 133804,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "8.bin.gz",
     "url": "?city=london&algo=random&steps=40&run=3",
     "size": 256,
     "steps": 40,
-    "bytes": 131964
+    "bytes": 132740,
+    "graph": 131964,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "9.bin.gz",
     "url": "?city=london&algo=anneal&steps=150",
     "size": 256,
     "steps": 150,
-    "bytes": 132284
+    "bytes": 133452,
+    "graph": 132284,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "10.bin.gz",
     "url": "?city=london&algo=greedy:20,anneal:100&shapes=line:1,via:1&snap=0.5",
     "size": 256,
     "steps": 120,
-    "bytes": 132464
+    "bytes": 133696,
+    "graph": 132464,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "11.bin.gz",
     "url": "?city=london&algo=greedy&steps=60&N=20&budget=3000",
     "size": 256,
     "steps": 60,
-    "bytes": 133864
+    "bytes": 136480,
+    "graph": 133864,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "12.bin.gz",
     "url": "?city=london&algo=greedy&steps=40&N=60",
     "size": 256,
     "steps": 40,
-    "bytes": 132488
+    "bytes": 133704,
+    "graph": 132488,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "13.bin.gz",
     "url": "?city=london&tiers=rer,express&express.speed=250&express.spacing=15000&algo=greedy&steps=40&budget=3000",
     "size": 256,
     "steps": 40,
-    "bytes": 133188
+    "bytes": 134668,
+    "graph": 133188,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "14.bin.gz",
     "url": "?city=london&algo=greedy&steps=40&shapes=line:1,via:1,arc:1&run=2",
     "size": 256,
     "steps": 40,
-    "bytes": 132816
+    "bytes": 134552,
+    "graph": 132816,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "15.bin.gz",
     "url": "?city=london&algo=greedy&steps=40&shapes=line:1,arc:2&turn=90&run=5",
     "size": 256,
     "steps": 40,
-    "bytes": 132656
+    "bytes": 134048,
+    "graph": 132656,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "16.bin.gz",
     "url": "?city=london&algo=greedy&steps=50&tube.headway=1&tram.headway=2&budget=3000",
     "size": 256,
     "steps": 50,
-    "bytes": 133400
+    "bytes": 135656,
+    "graph": 133400,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "17.bin.gz",
     "url": "?city=london&algo=greedy&steps=80&budget=6000&shapes=line:1,arc:1",
     "size": 256,
     "steps": 80,
-    "bytes": 135380
+    "bytes": 139424,
+    "graph": 135380,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "18.bin.gz",
     "url": "?city=london&algo=greedy&steps=40&stopMin=1&shapes=line:1,link:1",
     "size": 256,
     "steps": 40,
-    "bytes": 134196
+    "bytes": 138628,
+    "graph": 134196,
+    "walk": "walk-london.bin.gz"
   },
   {
     "file": "19.bin.gz",
     "url": "?city=london&goal=revenue&payback=5000&fare=0.3&tau=90&shapes=line:1,link:1&algo=greedy&steps=40",
     "size": 256,
     "steps": 40,
-    "bytes": 133036
+    "bytes": 135336,
+    "graph": 133036,
+    "walk": "walk-london.bin.gz"
   }
 ]

@@ -69,7 +69,7 @@ export const tenths = (min: number) => Math.round(min * 10);
 // Walk time, rounded to tenths of a minute for each edge. Tobler-style slope penalty.
 // Sea blocks. Rivers cost 5x (few bridges). Symmetric. One graph for each city.
 const walkCache = new WeakMap<City, Graph>();
-function walkGraph(city: City) {
+export function walkGraph(city: City) {
   let g = walkCache.get(city);
   if (!g) {
     const { elev, water } = city;
@@ -225,6 +225,73 @@ export function jobSamples(city: City, S: number) {
   return out;
 }
 
+// The edges of the lines, from the node of each station cell. Stop k of each line is a node, from first
+// up, in line order. Returns the next free node. Board = half the headway + 1 min. Alight = 0.5 min.
+export function lineEdges(
+  net: Net,
+  p: Params,
+  node: (c: number) => number,
+  first: number,
+  add: (a: number, b: number, w: number) => void,
+) {
+  let id = first;
+  for (const l of net.lines) {
+    const t = p.tierDefs[l.tier];
+    const r = (k: number) => tenths(ride(l.segs[k], t));
+    l.stops.forEach((c, k) => {
+      add(node(c), id + k, tenths(t.headway / 2 + 1));
+      add(id + k, node(c), 5);
+      if (k > 0) {
+        add(id + k - 1, id + k, r(k - 1));
+        add(id + k, id + k - 1, r(k - 1));
+      }
+    });
+    // A loop rides from the last stop to the first stop on its last segment.
+    const n = l.stops.length;
+    if (l.loop && n > 2) {
+      add(id + n - 1, id, r(n - 1));
+      add(id, id + n - 1, r(n - 1));
+    }
+    id += n;
+  }
+  return id;
+}
+
+// The baked graph of the seanmizen.com background, in tenths of a minute. The browser search reads it.
+// walkTimes: for each cell, the walk time to the cell east, south, south-east and south-west. 0: no edge.
+// The walk graph is symmetric, so these 4 give all 8 directions.
+export function walkTimes(city: City) {
+  const { w } = city;
+  const g = walkGraph(city);
+  const slot = new Map([
+    [1, 0],
+    [w, 1],
+    [w + 1, 2],
+    [w - 1, 3],
+  ]);
+  const out = new Uint16Array(4 * w * w);
+  for (let i = 0; i < g.n; i++)
+    for (let e = g.off[i]; e < g.off[i + 1]; e++) {
+      const s = slot.get(g.to[e] - i);
+      if (s !== undefined) out[4 * i + s] = g.w[e];
+    }
+  return out;
+}
+
+// netTimes: for each line, the board time, the stop count n, the ride count m, the n stop cells, then
+// the m ride times. A loop has m = n: the last ride goes from the last stop to the first stop.
+export function netTimes(net: Net, p: Params) {
+  return Uint16Array.from(
+    net.lines.flatMap((l) => {
+      const t = p.tierDefs[l.tier];
+      const n = l.stops.length;
+      const m = l.loop && n > 2 ? n : n - 1;
+      const rides = l.segs.slice(0, m).map((d) => tenths(ride(d, t)));
+      return [tenths(t.headway / 2 + 1), n, m, ...l.stops, ...rides];
+    }),
+  );
+}
+
 // One network, ready to score. The nodes are the stations, then the sample cells that are not stations.
 // D[u * S + j]: the time from node u to sample j. cells: the cells within walk of a node, in cell order.
 // The entries off[k] to off[k + 1] are the nodes near cells[k]: pairs of (u * S, walk time).
@@ -261,26 +328,7 @@ export function prep(city: City, net: Net, p: Params, S: number): Prep {
     e.b.push(b);
     e.w.push(w);
   };
-  let id = K;
-  for (const l of net.lines) {
-    const t = p.tierDefs[l.tier];
-    const r = (k: number) => tenths(ride(l.segs[k], t));
-    l.stops.forEach((c, k) => {
-      add(node(c), id + k, tenths(t.headway / 2 + 1));
-      add(id + k, node(c), 5);
-      if (k > 0) {
-        add(id + k - 1, id + k, r(k - 1));
-        add(id + k, id + k - 1, r(k - 1));
-      }
-    });
-    // A loop rides from the last stop to the first stop on its last segment.
-    const n = l.stops.length;
-    if (l.loop && n > 2) {
-      add(id + n - 1, id, r(n - 1));
-      add(id, id + n - 1, r(n - 1));
-    }
-    id += n;
-  }
+  const id = lineEdges(net, p, node, K, add);
   for (let s = 0; s < K; s++)
     stationsNear(s, (t, w) => {
       if (t !== s) add(s, t, w);

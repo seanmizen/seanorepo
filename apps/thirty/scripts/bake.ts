@@ -8,12 +8,14 @@
 // G: the step at which the unmet demand of the cell falls below half of its start value. 255: never.
 // Then the lines of the last step, as Uint16 values: for each line, the step at which it appears,
 // its point count n, then n points x, y. A point is in the tube-map layout, from 0 to 65535 across
-// the square city. index.json gives the unzipped size in bytes.
-// The output is the same bytes on each run: a fixed gzip level and a fixed gzip header.
+// the square city. Then, from byte `graph`, the network for the browser search: netTimes() in
+// src/graph.ts. index.json gives `graph` and the unzipped size in bytes.
+// All cities on one map share one walk file, walk-{city}.bin.gz: walkTimes() in src/graph.ts, as
+// Uint16 values. Its unzipped size is 8 bytes for each cell.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { fromBytes, genCity } from '../src/gen.ts';
-import { evaluate } from '../src/graph.ts';
+import { evaluate, netTimes, walkTimes } from '../src/graph.ts';
 import { layout, type Pt, tubePath } from '../src/layout.ts';
 import { type Line, run, type Snap } from '../src/net.ts';
 import { parse } from '../src/params.ts';
@@ -29,6 +31,15 @@ mkdirSync(out, { recursive: true });
 
 const key = (l: Line) => `${l.tier}:${l.stops.join(',')}`;
 let bytes = 0;
+// The output is the same bytes on each run: a fixed gzip level and a fixed gzip header.
+const write = (name: string, raw: Uint8Array) => {
+  const gz = gzipSync(raw, { level: 9 });
+  gz[9] = 255; // The OS byte of the header: unknown, so each machine writes the same bytes.
+  writeFileSync(new URL(name, out), gz);
+  bytes += gz.length;
+  return gz.length;
+};
+const walks = new Set<string>();
 const index = urls.map((qs, n) => {
   const p = parse(qs);
   // A real city loads from public/cities. The page that shows it credits its data.
@@ -43,6 +54,13 @@ const index = urls.map((qs, n) => {
       )
     : genCity(p);
   const { w } = city;
+  if (w > 256) throw new Error('A cell must fit in a Uint16 value.');
+  const walk = `walk-${p.city || n}.bin.gz`;
+  if (!walks.has(walk)) {
+    const wt = walkTimes(city);
+    console.log(`${walk} ${write(walk, new Uint8Array(wt.buffer))} bytes`);
+    walks.add(walk);
+  }
   const snaps = [...run(city, p)].filter((s): s is Snap => !Array.isArray(s));
   const steps = snaps.length - 1;
   if (steps > 254) throw new Error(`Use at most 254 steps, not ${steps}.`);
@@ -109,18 +127,16 @@ const index = urls.map((qs, n) => {
     });
     return keep.length < 2 ? [] : [appear[j], keep.length, ...keep.flat()];
   });
-  const raw = new Uint8Array(tex.length + 2 * lines.length);
+  const words = [...lines, ...netTimes(snaps[steps].net, p)];
+  const raw = new Uint8Array(tex.length + 2 * words.length);
   raw.set(tex);
   const view = new DataView(raw.buffer);
-  for (const [k, v] of lines.entries())
+  for (const [k, v] of words.entries())
     view.setUint16(tex.length + 2 * k, v, true);
 
-  const gz = gzipSync(raw, { level: 9 });
-  gz[9] = 255; // The OS byte of the header: unknown, so each machine writes the same bytes.
-  writeFileSync(new URL(`${n}.bin.gz`, out), gz);
-  bytes += gz.length;
+  const size = write(`${n}.bin.gz`, raw);
   console.log(
-    `${n}.bin.gz ${gz.length} bytes, ${steps} steps, ${last.length} lines, ${lines.length} values: ${qs}`,
+    `${n}.bin.gz ${size} bytes, ${steps} steps, ${last.length} lines, ${words.length} values: ${qs}`,
   );
   return {
     file: `${n}.bin.gz`,
@@ -128,6 +144,8 @@ const index = urls.map((qs, n) => {
     size: w,
     steps,
     bytes: raw.length,
+    graph: tex.length + 2 * lines.length,
+    walk,
   };
 });
 writeFileSync(
