@@ -411,11 +411,13 @@ function draw() {
     lineMode.value === 'by line' ? u : STYLE[l.tier][1] * lw;
   const { pts, stations } = layout(lines, at, width, 0.6 * u);
   // Rounded corners: each bend is an arc no wider than half of either leg.
-  const stroke = (all: Pt[], loop: boolean) => {
+  // All lines at one corner share the arc centre of the cell's centre line, at radius 3u.
+  // Each line's radius is its distance from that centre, so side-by-side lines stay side by side.
+  const stroke = (all: Pt[], cells: Pt[], loop: boolean) => {
     // Remove points where the line goes straight on, so corners get their full radius.
     // Keep the tip where a line turns back on itself.
-    const p = all.filter((q, k) => {
-      if (k === 0 || k === all.length - 1) return true;
+    const keep = all.flatMap((q, k) => {
+      if (k === 0 || k === all.length - 1) return [k];
       const [a, b] = [all[k - 1], all[k + 1]];
       const [ux, uy, vx, vy] = [
         q[0] - a[0],
@@ -423,16 +425,37 @@ function draw() {
         b[0] - q[0],
         b[1] - q[1],
       ];
-      return Math.abs(ux * vy - uy * vx) > 1e-6 || ux * vx + uy * vy < 0;
+      return Math.abs(ux * vy - uy * vx) > 1e-6 || ux * vx + uy * vy < 0
+        ? [k]
+        : [];
     });
+    const p = keep.map((k) => all[k]);
+    const c = keep.map((k) => cells[k]);
+    const unit = (x: number, y: number): Pt => {
+      const m = Math.hypot(x, y);
+      return [x / m, y / m];
+    };
     ctx.beginPath();
     ctx.moveTo(...p[0]);
     for (let k = 1; k < p.length - 1; k++) {
       const half = (q: Pt) => Math.hypot(q[0] - p[k][0], q[1] - p[k][1]) / 2;
+      const [ax, ay] = unit(p[k][0] - p[k - 1][0], p[k][1] - p[k - 1][1]);
+      const [bx, by] = unit(p[k + 1][0] - p[k][0], p[k + 1][1] - p[k][1]);
+      const cos = Math.sqrt(Math.max(0, (1 + ax * bx + ay * by) / 2));
+      let r = 3 * u;
+      if (cos > 0.1) {
+        const [mx, my] = unit(bx - ax, by - ay);
+        const z = [c[k][0] + (mx * r) / cos, c[k][1] + (my * r) / cos];
+        // Distance from the centre z to the line's two legs, on the inside of the bend.
+        const leg = (dx: number, dy: number) =>
+          ((dx * (z[1] - p[k][1]) - dy * (z[0] - p[k][0])) *
+            Math.sign(dx * (z[1] - c[k][1]) - dy * (z[0] - c[k][0]))) as number;
+        r = Math.max(0.5 * u, (leg(ax, ay) + leg(bx, by)) / 2);
+      }
       ctx.arcTo(
         ...p[k],
         ...p[k + 1],
-        Math.min(3 * u, half(p[k - 1]), half(p[k + 1])),
+        Math.min(r, half(p[k - 1]), half(p[k + 1])),
       );
     }
     ctx.lineTo(...p[p.length - 1]);
@@ -443,7 +466,7 @@ function draw() {
   lines.forEach((l, j) => {
     ctx.strokeStyle = lineColor(l, ids[j]);
     ctx.lineWidth = width(l);
-    stroke(pts[j], l.loop);
+    stroke(pts[j], l.path.map(at), l.loop);
   });
   // Tube-map stations. One line: a dot, or a tick on its side. Two or more: round nodes
   // 3u wide, one node for each three lines, touching, so they draw as one shape.
