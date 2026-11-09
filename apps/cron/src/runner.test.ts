@@ -5,7 +5,13 @@ import type { Job } from './job';
 import { obellSnapshot } from './jobs/obell-snapshot';
 import { obellUptime } from './jobs/obell-uptime';
 import { registry } from './registry';
-import { checkRegistry, dashboard, runJob, startJobs } from './runner';
+import {
+  checkRegistry,
+  dashboard,
+  runJob,
+  startJobs,
+  startupEmail,
+} from './runner';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -76,6 +82,22 @@ describe('runner', () => {
     const uptime = body.jobs.find((j) => j.id === 'obell-uptime');
     expect(uptime?.human).toBe('Every 5 minutes');
     expect(uptime?.nextRun).not.toBeNull();
+  });
+});
+
+describe('startup email', () => {
+  test('names each job, its schedule and its next run', () => {
+    const db = openDb(':memory:');
+    const crons = startJobs(db, registry);
+    const email = startupEmail(registry, crons);
+    for (const cron of crons.values()) cron.stop();
+    expect(email.subject).toBe('cron started');
+    for (const job of registry) {
+      expect(email.text).toContain(`(${job.id})`);
+      expect(email.text).toContain(`Schedule: ${job.schedule}`);
+    }
+    expect(email.text).toContain('(Every 5 minutes)');
+    expect(email.text).not.toContain('Next run: none');
   });
 });
 
