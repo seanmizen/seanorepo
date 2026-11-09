@@ -10,7 +10,6 @@ import {
   useMatch,
 } from 'react-router-dom';
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
-import { StoryPage, stories } from '@/features';
 import { ThemeContext, ThemeProvider } from '@/providers';
 import {
   BabyComeBack,
@@ -80,14 +79,6 @@ const App: FC = () => {
           <Route path="/babycomeback" element={<BabyComeBack />} />
           {/* The scheduled jobs. apps/cron serves its data at /api/cron. */}
           <Route path="/cron" element={<Cron />} />
-          {/* The intentionality stories: one page each. */}
-          {stories.map((story) => (
-            <Route
-              key={story.slug}
-              path={`/${story.slug}`}
-              element={<StoryPage story={story} />}
-            />
-          ))}
           <Route element={<Layout />}>
             <Route path="/projects" element={<Projects />} />
             <Route path="/*" element={<Home />} />
