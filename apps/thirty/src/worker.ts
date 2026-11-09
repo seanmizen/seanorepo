@@ -1,13 +1,15 @@
-import { genCity } from './gen.ts';
+import { fromBytes, genCity } from './gen.ts';
 import { evaluate } from './graph.ts';
 import { hashNet, run, spent } from './net.ts';
 import { parse } from './params.ts';
 
 // Runs the chain. Posts the city once, then a snapshot per step (at most one each 100 ms).
-self.onmessage = ({ data }: MessageEvent<string>) => {
+self.onmessage = async ({ data }: MessageEvent<string>) => {
   try {
     const p = parse(data);
-    const city = genCity(p);
+    const res = p.city ? await fetch(`/cities/${p.city}.bin`) : null;
+    if (res && !res.ok) throw new Error(`Unknown city: ${p.city}.`);
+    const city = res ? fromBytes(await res.arrayBuffer(), p.city) : genCity(p);
     postMessage({ type: 'city', city });
     let last = 0;
     let hash = '';

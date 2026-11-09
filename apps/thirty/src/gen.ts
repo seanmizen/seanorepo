@@ -24,8 +24,13 @@ export function mulberry32(seed: number): Rng {
   };
 }
 
-export function genCity(p: Params, w = 128, cellM = 350): City {
+// Noise and centres work in metres, so a bigger `size` adds area. 44.8 km is the default map.
+export function genCity(p: Params): City {
+  const w = p.size;
+  const cellM = p.cell;
   const n = w * w;
+  const unit = cellM / 44800;
+  const area = (w * unit) ** 2;
   const rng = mulberry32(p.seed);
   const noise = createNoise2D(rng);
   const fbm = (x: number, y: number) => {
@@ -38,8 +43,8 @@ export function genCity(p: Params, w = 128, cellM = 350): City {
   // Height: warped fBm plus ridges. Sea level is the quantile that gives `sea`.
   const raw = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const u = (i % w) / w;
-    const v = Math.floor(i / w) / w;
+    const u = (i % w) * unit;
+    const v = Math.floor(i / w) * unit;
     const x = u + p.warp * 0.4 * fbm(u * 3 + 11, v * 3);
     const y = v + p.warp * 0.4 * fbm(u * 3, v * 3 + 7);
     raw[i] =
@@ -78,7 +83,7 @@ export function genCity(p: Params, w = 128, cellM = 350): City {
 
   // Centres: flat land near water, Zipf sizes, at least 15 cells apart.
   const picks: { i: number; s: number }[] = [];
-  for (let t = 0; t < 300; t++) {
+  for (let t = 0; t < 300 * area; t++) {
     const i = Math.floor(rng() * n);
     if (water[i]) continue;
     let wet = false;
@@ -91,9 +96,12 @@ export function genCity(p: Params, w = 128, cellM = 350): City {
   }
   picks.sort((a, b) => b.s - a.s);
   const centres: number[] = [];
-  const k = 3 + Math.floor(rng() * 4);
+  const k = Math.round((3 + Math.floor(rng() * 4)) * area);
   for (const { i } of picks)
-    if (centres.length < k && centres.every((c) => cellDist(c, i, w) > 15))
+    if (
+      centres.length < k &&
+      centres.every((c) => cellDist(c, i, w) * cellM > 5250)
+    )
       centres.push(i);
 
   const pop = new Float32Array(n);
@@ -101,7 +109,9 @@ export function genCity(p: Params, w = 128, cellM = 350): City {
   for (let i = 0; i < n; i++) {
     if (water[i]) continue;
     const tex =
-      (0.75 + 0.25 * fbm((i % w) / 10, Math.floor(i / w) / 10)) *
+      (0.75 +
+        0.25 *
+          fbm(((i % w) * cellM) / 3500, (Math.floor(i / w) * cellM) / 3500)) *
       Math.exp(-10 * slope[i]);
     centres.forEach((c, j) => {
       const d = cellDist(c, i, w) * cellM;
@@ -112,6 +122,24 @@ export function genCity(p: Params, w = 128, cellM = 350): City {
     jobs[i] += 0.02 * pop[i];
   }
   return { w, cellM, elev, water, pop: norm(pop), jobs: norm(jobs) };
+}
+
+// Real data: Float32 [w, cellM, elev, water, pop, jobs], row 0 north. See scripts/import-city.py.
+export function fromBytes(buf: ArrayBuffer, name: string): City {
+  const f = new Float32Array(buf);
+  const w = f[0];
+  const n = w * w;
+  if (!Number.isInteger(w) || w < 16 || w > 2048 || f.length !== 2 + 4 * n)
+    throw new Error(`City ${name} is not a valid city file.`);
+  const at = (k: number) => f.slice(2 + k * n, 2 + (k + 1) * n);
+  return {
+    w,
+    cellM: f[1],
+    elev: at(0),
+    water: Uint8Array.from(at(1)),
+    pop: norm(at(2)),
+    jobs: norm(at(3)),
+  };
 }
 
 export const cellDist = (a: number, b: number, w: number) =>

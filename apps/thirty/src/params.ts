@@ -55,7 +55,10 @@ export const TIER_DEFAULTS: Record<string, Tier> = {
 };
 
 export const DEFAULTS = {
+  city: '',
   seed: 1,
+  size: 128,
+  cell: 350,
   sea: 0.2,
   rivers: 2,
   hills: 0.3,

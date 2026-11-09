@@ -1,4 +1,4 @@
-// The 20 URLs that must work. Four cities: river, bay, archipelago, ridge.
+// The URLs that must work. Four generated cities (river, bay, archipelago, ridge), a bigger map, London and Lisbon.
 const A = 'seed=11&sea=0.1&rivers=3&hills=0.2';
 const B = 'seed=22&sea=0.35&rivers=1&hills=0.3';
 const C = 'seed=33&sea=0.55&warp=0.8&rivers=0';
@@ -25,6 +25,7 @@ export const FIXTURES = [
   `${D}&algo=greedy&steps=30&tube.headway=2`,
   `${D}&algo=random&steps=30&run=7`,
   `${D}&algo=greedy:20,anneal:100&N=60`,
+  `${B}&size=256&algo=greedy&steps=30`,
 ];
 
 // Index pairs (0-based) that differ only in run, N or tiers. Their hashes must differ.

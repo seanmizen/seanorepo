@@ -1,14 +1,27 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DIFFERENT, FIXTURES } from './fixtures.ts';
-import { genCity } from './gen.ts';
+import { fromBytes, genCity } from './gen.ts';
 import { hashNet, run, type Snap, spent } from './net.ts';
-import { parse } from './params.ts';
+import { type Params, parse } from './params.ts';
+
+const load = (p: Params) =>
+  p.city
+    ? fromBytes(
+        new Uint8Array(
+          readFileSync(
+            new URL(`../public/cities/${p.city}.bin`, import.meta.url),
+          ),
+        ).buffer,
+        p.city,
+      )
+    : genCity(p);
 
 const cache = new Map<string, { hash: string; snaps: Snap[] }>();
 function finish(qs: string) {
   const p = parse(qs);
-  const snaps = [...run(genCity(p), p)];
+  const snaps = [...run(load(p), p)];
   return { p, snaps, hash: hashNet(snaps[snaps.length - 1].net) };
 }
 
@@ -21,8 +34,8 @@ export function checkFixtures(from: number, to: number) {
       cache.set(qs, r);
       const { p, snaps } = r;
       const last = snaps[snaps.length - 1];
-      if (!p.chain.length) {
-        const city = genCity(p);
+      if (!p.chain.length && !p.city) {
+        const city = load(p);
         const wet =
           city.water.reduce((s, x) => s + (x ? 1 : 0), 0) / city.water.length;
         assert.ok(wet >= p.sea - 0.01 && wet <= p.sea + 0.1, `water ${wet}`);
