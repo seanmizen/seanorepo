@@ -21,7 +21,7 @@ type City = {
 };
 
 const TEXELS = 256;
-const SECONDS = 12;
+const SECONDS = 20;
 const vert = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
 /* Ink and accent, the same as the face shader. */
