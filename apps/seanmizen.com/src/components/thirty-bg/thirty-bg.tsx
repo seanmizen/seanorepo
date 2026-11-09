@@ -79,6 +79,11 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
     const renderer = new THREE.WebGLRenderer({ canvas, context: gl });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     renderer.setClearColor(0x000000, 0);
+    // The canvas fades in once the city's first frame is drawn, so London
+    // does not appear in one frame. With reduced motion it shows at once.
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    canvas.style.opacity = '0';
+    if (!still) canvas.style.transition = 'opacity 0.4s ease-out';
     mount.appendChild(canvas);
     // The dots and lines clear the page text, as the face shader does.
     const { contentMask, tightMask, drawMask } = contentMasks(canvas);
@@ -316,10 +321,10 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
         });
       };
       // With reduced motion, or for end, draw the last frame once.
-      if (end || matchMedia('(prefers-reduced-motion: reduce)').matches)
-        uniforms.t.value = 1;
+      if (end || still) uniforms.t.value = 1;
       drawMask();
       paint.current();
+      canvas.style.opacity = '1';
       animate();
     };
     // A background has no place to show an error. It draws nothing.
