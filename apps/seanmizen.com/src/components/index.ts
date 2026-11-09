@@ -11,3 +11,4 @@ export { SiteTitle } from './site-title';
 export { Spacer } from './spacer';
 export { Subtitle } from './subtitle';
 export { ThemeToggle } from './theme-toggle';
+export { ThirtyBg } from './thirty-bg';
