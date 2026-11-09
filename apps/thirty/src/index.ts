@@ -31,7 +31,7 @@ const GROUPS: [string, string[]][] = [
     'Goal',
     ['goal', 'N', 'walk', 'budget', 'samples', 'tau', 'fare', 'payback'],
   ],
-  ['Stations', ['interchange', 'snap']],
+  ['Stations', ['interchange', 'snap', 'stopMin']],
   ['Lines', ['shapes', 'turn', 'join']],
 ];
 const HINT: Record<string, string> = {
@@ -60,6 +60,8 @@ const HINT: Record<string, string> = {
     'Job samples in the score that the run maximises. More is more exact and slower. At most the cells with jobs.',
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
+  stopMin:
+    'Least demand (homes and jobs within half the tier spacing) for a stop between the ends and via points, as a multiple of the mean of a land cell. 0: a stop at each spacing.',
   shapes:
     'Candidate shapes and their weights: line, via, arc, link. Example: line:1,via:1,arc:1.',
   turn: 'Largest turn in degrees at a via point or a join station. 180: no limit.',

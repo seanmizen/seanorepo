@@ -294,6 +294,8 @@ build
 
 linux
 *.gz
+# The baked thirty cities for the seanmizen.com background. yarn thirty:bake writes them.
+!apps/seanmizen.com/public/thirty/*.gz
 
 working
 
