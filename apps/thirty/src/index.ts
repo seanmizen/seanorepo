@@ -28,6 +28,7 @@ const GROUPS: [string, string[]][] = [
   ['Run', ['algo', 'steps', 'run', 'candidates']],
   ['Goal', ['N', 'budget']],
   ['Stations', ['interchange', 'snap']],
+  ['Lines', ['shapes', 'turn', 'join']],
 ];
 const HINT: Record<string, string> = {
   city: 'london or lisbon. Empty: generate a city.',
@@ -46,6 +47,10 @@ const HINT: Record<string, string> = {
   budget: 'Total cost of track and stations.',
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
+  shapes:
+    'Candidate shapes and their weights: line, via, arc. Example: line:1,via:1,arc:1.',
+  turn: 'Largest turn in degrees at a via point or a join station. 180: no limit.',
+  join: 'Share of anneal moves that merge two lines with a shared end station.',
 };
 const UNIT: Record<string, string> = {
   spacing: 'm',
@@ -59,7 +64,7 @@ const UNIT: Record<string, string> = {
   maxKm: 'km',
 };
 const field = (k: string) =>
-  `<label${k === 'algo' ? ' class="wide"' : ''} title="${HINT[k] ?? ''}">${k}<input name="${k}" value="${value(k)}"></label>`;
+  `<label${k === 'algo' || k === 'shapes' ? ' class="wide"' : ''} title="${HINT[k] ?? ''}">${k}<input name="${k}" value="${value(k)}"></label>`;
 const grouped = new Set([...GROUPS.flatMap(([, ks]) => ks), 'tiers']);
 const groups = [
   ...GROUPS,
