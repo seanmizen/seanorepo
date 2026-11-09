@@ -4,22 +4,26 @@ import type { Line } from './net.ts';
 import { DEFAULTS, defaultOf, parse, TIER_DEFAULTS } from './params.ts';
 
 declare const GIT_SHA: string;
-type Snap = {
-  step: number;
-  total: number;
-  algo: string;
+// The map score of a step (256 samples). The worker sends it after the step, or when the page asks.
+type Score = {
   J: number;
   R: number;
   score: Float32Array;
   within: number;
   p50: number;
   p95: number;
+};
+type Snap = {
+  step: number;
+  total: number;
+  algo: string;
+  J: number;
   lines: Line[];
   cost: number;
   hash: string;
   N: number;
   budget: number;
-};
+} & Partial<Score>;
 
 const q = new URLSearchParams(location.search);
 const value = (k: string) => q.get(k) ?? defaultOf(k);
@@ -189,6 +193,9 @@ worker.onmessage = ({ data }) => {
     slider.max = String(snaps.length - 1);
     if (follow) slider.value = slider.max;
     if (follow) draw();
+  } else if (data.type === 'score') {
+    Object.assign(snaps[data.step], data);
+    draw();
   } else if (data.type === 'done') document.body.dataset.done = data.hash;
   else {
     stats.textContent = data.message;
@@ -197,7 +204,16 @@ worker.onmessage = ({ data }) => {
   }
 };
 worker.postMessage(q.toString());
-slider.oninput = () => draw();
+// A step with no map score: ask the worker for it, once.
+const asked = new Set<number>();
+slider.oninput = () => {
+  const i = Number(slider.value);
+  if (!snaps[i].score && !asked.has(i)) {
+    asked.add(i);
+    worker.postMessage(i);
+  }
+  draw();
+};
 layer.onchange = () => draw();
 lineMode.onchange = () => draw();
 stopMode.onchange = () => draw();
@@ -359,14 +375,14 @@ let map = new OffscreenCanvas(1, 1);
 let max = 1e-12;
 // Unmet demand: the homes and jobs of a cell, times the share of its score it does not get.
 // With reach the score is a share (0 to 1). With revenue it is a share of the best cell's fares.
-function unmet(s: Snap) {
+function unmet(s: Score) {
   const top = revenue ? s.score.reduce((m, x) => Math.max(m, x), 1e-12) : 1;
   return city.pop.map(
     (p, i) => (p + city.jobs[i]) * Math.max(0, 1 - s.score[i] / top),
   );
 }
 
-function drawMap(s: Snap) {
+function drawMap(s: Score) {
   const { w, elev, water, cellM } = city;
   const vals =
     {
@@ -401,14 +417,24 @@ function drawMap(s: Snap) {
   map.getContext('2d')?.putImageData(img, 0, 0);
 }
 
+// The nearest step to step i that has a map score, or -1.
+const near = (i: number) => {
+  for (let d = 0; d < snaps.length; d++)
+    for (const k of [i - d, i + d]) if (snaps[k]?.score) return k;
+  return -1;
+};
+
 let keyFor = '';
 function draw() {
   const s = snaps[Number(slider.value)];
-  if (!city || !s) return;
+  const m = near(Number(slider.value));
+  if (!city || !s || m < 0) return;
+  // The map and the map statistics come from step m. The lines come from step s.
+  const e = snaps[m] as Snap & Score;
   const { w, cellM } = city;
-  if (mapFor !== `${slider.value}|${layer.value}`) {
-    mapFor = `${slider.value}|${layer.value}`;
-    drawMap(s);
+  if (mapFor !== `${m}|${layer.value}`) {
+    mapFor = `${m}|${layer.value}`;
+    drawMap(e);
   }
   const want = `${layer.value}|${lineMode.value}|${lineMode.value === 'by line' ? s.step : ''}`;
   if (keyFor !== want) {
@@ -590,7 +616,7 @@ function draw() {
       }
     }
   }
-  stats.textContent = `Step ${s.step}/${s.total} ${s.algo} · jobs within ${s.N} min: ${(s.within * 100).toFixed(1)}% · P50 ${fmt(s.p50, s.N)} · P95 ${fmt(s.p95, s.N)} · ${revenue ? `R ${s.R.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget} (${(s.cost / (params?.payback ?? 1)).toFixed(4)} in R) · profit ${s.J.toFixed(4)}` : `J ${s.J.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget}`} · ${s.lines.length} lines · hash ${s.hash} · ${((w * cellM) / 1000).toFixed(0)} km across`;
+  stats.textContent = `Step ${s.step}/${s.total} ${s.algo}${e === s ? '' : ` · map of step ${e.step}`} · jobs within ${s.N} min: ${(e.within * 100).toFixed(1)}% · P50 ${fmt(e.p50, s.N)} · P95 ${fmt(e.p95, s.N)} · ${revenue ? `R ${e.R.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget} (${(s.cost / (params?.payback ?? 1)).toFixed(4)} in R) · profit ${s.J.toFixed(4)}` : `J ${s.J.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget}`} · ${s.lines.length} lines · hash ${s.hash} · ${((w * cellM) / 1000).toFixed(0)} km across`;
 }
 
 fit();
