@@ -5,8 +5,8 @@
 import { readFileSync } from 'node:fs';
 import { FIXTURES } from '../src/fixtures.ts';
 import { fromBytes, genCity, mulberry32 } from '../src/gen.ts';
-import { evaluate } from '../src/graph.ts';
-import { ALGOS, hashNet, run, SAMPLES } from '../src/net.ts';
+import { evaluate, samples } from '../src/graph.ts';
+import { ALGOS, hashNet, run } from '../src/net.ts';
 import { parse } from '../src/params.ts';
 
 const load = (p) =>
@@ -33,7 +33,7 @@ for (const i of [6, 22]) {
   const runMs = performance.now() - t;
   // The final network of the run, 10 times.
   t = performance.now();
-  for (let k = 0; k < 10; k++) evaluate(city, net, p, SAMPLES);
+  for (let k = 0; k < 10; k++) evaluate(city, net, p, samples(city, p));
   const evalMs = (performance.now() - t) / 10;
   console.log(
     `| ${i + 1} | ${p.city || 'generated'} | ${evalMs.toFixed(1)} | ${runMs.toFixed(0)} | ${hashNet(net)} |`,
@@ -51,7 +51,7 @@ for (const C of [12, 400]) {
   const nets = ALGOS.greedy(net, ctx).score;
   const makeMs = performance.now() - t;
   t = performance.now();
-  for (const n of nets) evaluate(city, n, p, SAMPLES);
+  for (const n of nets) evaluate(city, n, p, samples(city, p));
   const scoreMs = performance.now() - t;
   console.log(
     `| ${C} | ${nets.length} | ${makeMs.toFixed(0)} | ${scoreMs.toFixed(0)} |`,

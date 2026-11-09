@@ -73,6 +73,7 @@ export const DEFAULTS = {
   run: 1,
   N: 30,
   walk: 0, // longest walk leg in minutes. 0: the same as N
+  samples: 32, // job samples in J, at most the cells with jobs
   budget: 1500,
   candidates: 12,
   interchange: 0.25, // share of station cost to stop where a station exists

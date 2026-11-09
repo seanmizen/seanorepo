@@ -26,7 +26,7 @@ const value = (k: string) => q.get(k) ?? defaultOf(k);
 const GROUPS: [string, string[]][] = [
   ['City', ['city', 'seed', 'size', 'cell', 'sea', 'rivers', 'hills', 'warp']],
   ['Run', ['algo', 'steps', 'run', 'candidates', 'gpu']],
-  ['Goal', ['N', 'walk', 'budget']],
+  ['Goal', ['N', 'walk', 'budget', 'samples']],
   ['Stations', ['interchange', 'snap']],
   ['Lines', ['shapes', 'turn', 'join']],
 ];
@@ -47,6 +47,8 @@ const HINT: Record<string, string> = {
   walk: 'Longest walk leg in minutes: to a station, from a station, between stations, or the whole trip. 0: the same as N.',
   gpu: '1: score on the GPU if the browser has WebGPU. 0: on the CPU. The result is the same.',
   budget: 'Total cost of track and stations.',
+  samples:
+    'Job samples in the score that the run maximises. More is more exact and slower. At most the cells with jobs.',
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
   shapes:
