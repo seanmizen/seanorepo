@@ -1,0 +1,41 @@
+# thirty - thirty.seanmizen.com
+# Port 4110: the static page. No backend.
+
+x-frontend-base: &frontend-base
+  container_name: thirty
+  build:
+    context: ../..
+    dockerfile: apps/thirty/dockerfile
+    target: ${BUILD_TARGET:-dev}
+    args:
+      GIT_SHA: ${GIT_SHA:-unknown}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4110:4110"
+
+services:
+  frontend:
+    <<: *frontend-base
+    profiles: ["prod"]
+    restart: unless-stopped
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [thirty]
+
+  frontend-dev:
+    <<: *frontend-base
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - fe_node_modules:/app/node_modules
+    profiles: ["dev"]
+
+volumes:
+  fe_node_modules:
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true

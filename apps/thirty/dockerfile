@@ -1,0 +1,41 @@
+# thirty.seanmizen.com: the RSBuild output (index.html, bench.html, the
+# workers and public/cities/*.bin), served by `serve` on 4110. The same
+# pattern as apps/seanmizen.com. There is no backend.
+
+FROM node:24-slim AS dev
+WORKDIR /app/apps/thirty
+# docker-compose bind-mounts the monorepo at /app. The image has no git.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+CMD ["yarn", "rsbuild", "dev", "--host", "0.0.0.0"]
+
+FROM node:24-slim AS prod-build
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/thirty/package.json ./apps/thirty/
+
+# puppeteer is a devDependency for scripts/check-urls.mjs. The build does not
+# use it, so it gets no Chrome.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN yarn workspaces focus thirty
+
+COPY apps/thirty/src ./apps/thirty/src
+COPY apps/thirty/public ./apps/thirty/public
+COPY apps/thirty/rsbuild.config.ts apps/thirty/tsconfig.json ./apps/thirty/
+
+# The image has no .git. prod:docker gives the commit as a build arg, and
+# rsbuild.config.ts puts it in the page footer.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA} NODE_ENV=production
+RUN yarn workspace thirty build
+
+FROM node:24-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/thirty/dist .
+RUN npm install -g serve
+EXPOSE 4110
+# No -s: thirty has no client routes, so a missing file is a 404 and never
+# index.html.
+CMD ["serve", ".", "-l", "4110"]

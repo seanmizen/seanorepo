@@ -90,5 +90,10 @@ ingress:
   - hostname: demo-crm.seanmizen.com
     service: http://localhost:4101
 
+  # thirty.seanmizen.com - Port 4110. One static page, no backend. WebGPU
+  # needs the HTTPS of the tunnel (a secure context).
+  - hostname: thirty.seanmizen.com
+    service: http://localhost:4110
+
   # Catch-all for unmatched routes
   - service: http_status:404
