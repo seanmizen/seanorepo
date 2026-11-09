@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { ThemeContext } from '@/providers';
 import type { Theme } from '@/types';
@@ -16,8 +16,6 @@ type City = {
   size: number;
   steps: number;
   bytes: number;
-  /* The data credit of a real city. */
-  credit?: string;
 };
 
 const TEXELS = 256;
@@ -29,6 +27,10 @@ const colours = (theme: Theme) =>
   theme === 'dark'
     ? [HOME_PARAMS.darkInk, HOME_PARAMS.darkAccent]
     : [HOME_PARAMS.lightInk, HOME_PARAMS.lightAccent];
+
+/* The baked cities are London. A page that shows one credits its data. */
+export const THIRTY_CREDIT =
+  'The background is a transit network for London from thirty. Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus.';
 
 type ThirtyBgProps = {
   /* The index of the city in index.json. Absent: a random city. */
@@ -46,7 +48,6 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const paint = useRef(() => {});
-  const [credit, setCredit] = useState('');
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -156,7 +157,6 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
     const load = async () => {
       const list: City[] = await (await fetch('/thirty/index.json')).json();
       const pick = list[city ?? Math.floor(Math.random() * list.length)];
-      setCredit(pick.credit ?? '');
       const raw = await (await fetch(`/thirty/${pick.file}`)).blob();
       // The dev server sends a .gz file with Content-Encoding: gzip, so the
       // browser has already unzipped it. Unzip only a file of another size.
@@ -240,24 +240,7 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
     paint.current();
   }, [theme]);
 
-  return (
-    <>
-      <div ref={mountRef} className="shader-container" aria-hidden="true" />
-      {credit && (
-        <small
-          style={{
-            position: 'fixed',
-            left: 12,
-            bottom: 8,
-            fontSize: 10,
-            opacity: 0.6,
-          }}
-        >
-          {credit}
-        </small>
-      )}
-    </>
-  );
+  return <div ref={mountRef} className="shader-container" aria-hidden="true" />;
 };
 
 export { ThirtyBg };

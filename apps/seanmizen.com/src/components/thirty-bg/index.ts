@@ -1,1 +1,1 @@
-export { ThirtyBg } from './thirty-bg';
+export { THIRTY_CREDIT, ThirtyBg } from './thirty-bg';

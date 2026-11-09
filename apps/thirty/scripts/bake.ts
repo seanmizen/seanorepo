@@ -20,8 +20,6 @@ import { parse } from '../src/params.ts';
 
 const T = 256; // Texels on a side.
 const S = 256; // Job samples in each score, the same as the page's display snapshot.
-const CREDIT =
-  'Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus';
 const SIDE = 400; // One line width on the tube map is 1 / SIDE of the city side.
 const out = new URL('../../seanmizen.com/public/thirty/', import.meta.url);
 const urls: string[] = JSON.parse(
@@ -33,7 +31,7 @@ const key = (l: Line) => `${l.tier}:${l.stops.join(',')}`;
 let bytes = 0;
 const index = urls.map((qs, n) => {
   const p = parse(qs);
-  // A real city loads from public/cities and needs its data credited.
+  // A real city loads from public/cities. The page that shows it credits its data.
   const city = p.city
     ? fromBytes(
         new Uint8Array(
@@ -130,7 +128,6 @@ const index = urls.map((qs, n) => {
     size: w,
     steps,
     bytes: raw.length,
-    ...(p.city ? { credit: CREDIT } : {}),
   };
 });
 writeFileSync(

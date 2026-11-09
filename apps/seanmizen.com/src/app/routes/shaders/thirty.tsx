@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import { useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SiteTitle, ThemeToggle, ThirtyBg } from '@/components';
+import { SiteTitle, THIRTY_CREDIT, ThemeToggle, ThirtyBg } from '@/components';
 import { ThemeContext } from '@/providers';
 
 /* A preview of the thirty background. ?city=n shows city n of
@@ -18,6 +18,9 @@ const ThirtyPreview: FC = () => {
         city={city === null ? undefined : Number(city)}
         end={params.has('end')}
       />
+      <p>
+        <small>{THIRTY_CREDIT}</small>
+      </p>
       <div className="bottom-right-controls">
         <ThemeToggle mode={mode} toggleMode={toggleMode} />
       </div>
