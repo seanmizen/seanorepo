@@ -10,7 +10,7 @@
 # ]
 # ///
 # Where: apps/thirty, on a dev machine with internet access.
-# When: by hand, to add a city or to refresh one. The output is checked in.
+# When: by hand, to add a city or to refresh one. Commit the output.
 # Why: makes the real-data city grid that the app loads from public/cities/{name}.bin.
 # Usage: uv run apps/thirty/scripts/import-city.py london [--cache DIR] [--preview DIR]
 #
@@ -25,6 +25,7 @@ import json
 import math
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -43,12 +44,13 @@ from scipy import ndimage
 from shapely.geometry import LineString, Polygon
 from shapely.ops import polygonize, unary_union
 
+# "rivers" names the OSM rivers that must stay one unbroken barrier. See water_layer.
 CITIES = {
-    "london": {"lat": 51.5072, "lon": -0.1276, "w": 256, "cellM": 250},
-    "lisbon": {"lat": 38.70, "lon": -9.17, "w": 256, "cellM": 200},
+    "london": {"lat": 51.5072, "lon": -0.1276, "w": 256, "cellM": 250, "rivers": ["River Thames"]},
+    "lisbon": {"lat": 38.70, "lon": -9.17, "w": 256, "cellM": 200, "rivers": []},
 }
 
-# Water is classified on a finer grid first. Each cell holds FINE x FINE fine pixels.
+# The water step uses a finer grid first. Each cell holds FINE x FINE fine pixels.
 FINE = 5
 
 DEM_URL = "https://copernicus-dem-30m.s3.amazonaws.com/{n}/{n}.tif"
@@ -57,10 +59,14 @@ GHSL_URL = (
     "{product}_V1_0_R{row}_C{col}.zip"
 )
 POP = ("GHS_POP_GLOBE_R2023A", "GHS_POP_E2020_GLOBE_R2023A_54009_100")
-NRES = ("GHS_BUILT_S_GLOBE_R2023A", "GHS_BUILT_S_NRES_E2020_GLOBE_R2023A_54009_100")
+# Jobs proxy: non-residential built volume. Built surface (BUILT-S NRES) puts the
+# London peak in the Dagenham sheds. Volume counts floors, so the towers of the
+# City and Canary Wharf come first.
+NRES = ("GHS_BUILT_V_GLOBE_R2023A", "GHS_BUILT_V_NRES_E2020_GLOBE_R2023A_54009_100")
 MOLLWEIDE = "ESRI:54009"
 OVERPASS = [
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
 UA = {"User-Agent": "seanorepo-thirty-import-city/1.0"}
@@ -75,7 +81,7 @@ def log(msg):
 
 def fetch(url, data=None):
     req = urllib.request.Request(url, data=data, headers=UA)
-    with urllib.request.urlopen(req, timeout=600) as r:
+    with urllib.request.urlopen(req, timeout=400) as r:
         return r.read()
 
 
@@ -97,7 +103,7 @@ class Grid:
         return (l - margin, b - margin, r + margin, t + margin)
 
 
-def warp_mosaic(paths, grid, src_crs, margin, nodata):
+def warp_mosaic(paths, grid, src_crs, margin):
     """Mosaics the source rasters over the grid, then averages them into the grid cells."""
     srcs = []
     for p in paths:
@@ -108,16 +114,17 @@ def warp_mosaic(paths, grid, src_crs, margin, nodata):
     if not srcs:
         raise SystemExit("No source raster covers this grid.")
     bounds = grid.bounds_in(src_crs, margin)
-    arr, tr = merge(srcs, bounds=bounds, nodata=nodata)
+    # Each source keeps its own nodata value. The mosaic marks nodata as NaN.
+    arr, tr = merge(srcs, bounds=bounds, dtype="float32", nodata=np.nan)
     for s in srcs:
         s.close()
     out = np.full((grid.w, grid.w), np.nan, dtype=np.float32)
     reproject(
-        source=arr[0].astype(np.float32),
+        source=arr[0],
         destination=out,
         src_transform=tr,
         src_crs=src_crs,
-        src_nodata=nodata,
+        src_nodata=np.nan,
         dst_transform=grid.transform,
         dst_crs=grid.crs,
         dst_nodata=np.nan,
@@ -137,13 +144,13 @@ def load_elev(grid):
             n = f"Copernicus_DSM_COG_10_{ns}_00_{ew}_00_DEM"
             paths.append(DEM_URL.format(n=n))
     log(f"elev: {len(paths)} DEM tile(s)")
-    elev = warp_mosaic(paths, grid, CRS.from_epsg(4326), 0.01, -32767.0)
+    elev = warp_mosaic(paths, grid, CRS.from_epsg(4326), 0.01)
     return np.nan_to_num(np.maximum(elev, 0), nan=0.0)
 
 
 def ghsl_tiles(grid, group, product, cache):
     """Downloads the GHSL tiles that cover the grid. Tiles are 1000 km squares in Mollweide."""
-    l, b, r, t = grid.bounds_in(MOLLWEIDE, 1000)
+    l, b, r, t = grid.bounds_in(MOLLWEIDE, 300)
     paths = []
     for row in range(int((9_000_000 - t) // 1e6) + 1, int((9_000_000 - b) // 1e6) + 2):
         for col in range(int((l + 18_041_000) // 1e6) + 1, int((r + 18_041_000) // 1e6) + 2):
@@ -161,30 +168,35 @@ def load_ghsl(grid, src, cache):
     """Returns the sum of a GHSL 100 m count layer over each grid cell."""
     paths = ghsl_tiles(grid, *src, cache)
     log(f"{src[1]}: {len(paths)} tile(s)")
-    mean = warp_mosaic(paths, grid, CRS.from_string(MOLLWEIDE), 1000, -200.0)
+    mean = warp_mosaic(paths, grid, CRS.from_string(MOLLWEIDE), 300)
     # Mollweide is equal-area, so each source pixel is 100 m x 100 m.
     # The cell mean times the pixels per cell gives the cell sum.
     return np.nan_to_num(np.maximum(mean, 0), nan=0.0) * (grid.cell / 100) ** 2
 
 
-def overpass(grid, cache, name):
+def overpass(grid, cache, name, rivers):
     path = cache / f"{name}-osm.json"
     if path.exists():
         return json.loads(path.read_text())
-    s, w, n, e = (lambda b: (b[1], b[0], b[3], b[2]))(grid.bounds_in(4326, 0.01))
-    bb = f"({s:.5f},{w:.5f},{n:.5f},{e:.5f})"
+    west, south, east, north = grid.bounds_in(4326, 0.01)
+    bb = f"({south:.5f},{west:.5f},{north:.5f},{east:.5f})"
     sel = ["natural=water", "waterway=riverbank", "landuse=reservoir"]
     parts = [f'{t}["{k}"="{v}"]{bb};' for k, v in (x.split("=") for x in sel) for t in ("way", "relation")]
-    q = f'[out:json][timeout:300];({"".join(parts)}way["natural"="coastline"]{bb};);out geom;'
+    parts.append(f'way["natural"="coastline"]{bb};')
+    parts += [f'way["waterway"="river"]["name"="{r}"]{bb};' for r in rivers]
+    q = f"[out:json][timeout:300];({''.join(parts)});out geom;"
     body = urllib.parse.urlencode({"data": q}).encode()
-    for url in OVERPASS:
-        try:
-            log(f"water: query {url}")
-            data = json.loads(fetch(url, body))
-            path.write_text(json.dumps(data))
-            return data
-        except Exception as err:  # noqa: BLE001
-            log(f"  failed: {err}")
+    # The public servers are often full. Try each one, and wait longer after each round.
+    for attempt in range(5):
+        for url in OVERPASS:
+            try:
+                log(f"water: query {url}")
+                data = json.loads(fetch(url, body))
+                path.write_text(json.dumps(data))
+                return data
+            except Exception as err:  # noqa: BLE001
+                log(f"  failed: {err}")
+        time.sleep(30 * 2**attempt)
     raise SystemExit("All Overpass servers failed.")
 
 
@@ -196,11 +208,14 @@ def water_layer(grid, osm):
         xs, ys = proj.transform([p["lon"] for p in geom], [p["lat"] for p in geom])
         return list(zip(xs, ys))
 
-    sea_lines, rivers, lakes = [], [], []
+    sea_lines, centre_lines, rivers, lakes = [], [], [], []
     for el in osm["elements"]:
         tags = el.get("tags", {})
         if tags.get("natural") == "coastline":
             sea_lines.append(line(el["geometry"]))
+            continue
+        if tags.get("waterway") == "river":
+            centre_lines.append(LineString(line(el["geometry"])))
             continue
         is_river = tags.get("water") == "river" or tags.get("waterway") == "riverbank"
         if el["type"] == "way":
@@ -240,6 +255,14 @@ def water_layer(grid, osm):
     wet = f1 + f2 > 0.5
     water[wet & (f1 >= f2)] = WATER_SEA
     water[wet & (f1 < f2)] = WATER_RIVER
+    # A river narrower than a cell breaks into dashes under the majority rule.
+    # So the centre line of each named river marks every land cell it passes through.
+    # It marks only cells that touch the river polygon. Tunnels and culverts stay land.
+    if centre_lines:
+        on_line = rasterize(
+            ((g, 1) for g in centre_lines), out_shape=water.shape, transform=grid.transform, all_touched=True
+        ).astype(bool)
+        water[on_line & (water == 0) & (f2 > 0)] = WATER_RIVER
     return water
 
 
@@ -252,8 +275,9 @@ def sea_mask(grid, lines, shape):
     """
     if not lines:
         return np.zeros(shape, bool)
-    wall = rasterize(((LineString(p), 1) for p in lines), out_shape=shape,
-                     transform=grid.fine_transform, all_touched=True).astype(bool)
+    wall = rasterize(
+        ((LineString(p), 1) for p in lines), out_shape=shape, transform=grid.fine_transform, all_touched=True
+    ).astype(bool)
     labels, count = ndimage.label(~wall)
     inv = ~grid.fine_transform
     step = 1.5 * grid.cell / FINE
@@ -296,8 +320,12 @@ def preview(name, layers, out):
 def main():
     ap = argparse.ArgumentParser(description="Make a city grid for the thirty app.")
     ap.add_argument("city", choices=sorted(CITIES))
-    ap.add_argument("--cache", type=Path, default=Path(tempfile.gettempdir()) / "thirty-cities",
-                    help="Directory for downloads. Default: the system temp directory.")
+    ap.add_argument(
+        "--cache",
+        type=Path,
+        default=Path(tempfile.gettempdir()) / "thirty-cities",
+        help="Directory for downloads. Default: the system temp directory.",
+    )
     ap.add_argument("--out", type=Path, help="Output file. Default: public/cities/{city}.bin.")
     ap.add_argument("--preview", type=Path, help="Write a PNG of each layer to this directory.")
     args = ap.parse_args()
@@ -309,7 +337,7 @@ def main():
     log(f"{args.city}: {grid.w}x{grid.w} cells of {grid.cell} m in {grid.crs}")
 
     elev = load_elev(grid)
-    water = water_layer(grid, overpass(grid, args.cache, args.city))
+    water = water_layer(grid, overpass(grid, args.cache, args.city, c["rivers"]))
     pop = load_ghsl(grid, POP, args.cache)
     jobs = load_ghsl(grid, NRES, args.cache)
     pop[water > 0] = 0

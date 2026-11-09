@@ -26,6 +26,10 @@ export const FIXTURES = [
   `${D}&algo=random&steps=30&run=7`,
   `${D}&algo=greedy:20,anneal:100&N=60`,
   `${B}&size=256&algo=greedy&steps=30`,
+  'city=london',
+  'city=london&algo=greedy&steps=30',
+  'city=lisbon',
+  'city=lisbon&algo=greedy&steps=30',
 ];
 
 // Index pairs (0-based) that differ only in run, N or tiers. Their hashes must differ.
