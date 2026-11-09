@@ -28,6 +28,7 @@ const GROUPS: [string, string[]][] = [
   ['Run', ['algo', 'steps', 'run', 'candidates']],
   ['Goal', ['N', 'budget']],
   ['Stations', ['interchange', 'snap']],
+  ['Lines', ['shapes', 'turn', 'join']],
 ];
 const HINT: Record<string, string> = {
   city: 'london or lisbon. Empty: generate a city.',
@@ -46,6 +47,10 @@ const HINT: Record<string, string> = {
   budget: 'Total cost of track and stations.',
   interchange: 'Share of the station cost to stop at an existing station.',
   snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
+  shapes:
+    'Candidate shapes and their weights: line, via, arc. Example: line:1,via:1,arc:1.',
+  turn: 'Largest turn in degrees at a via point or a join station. 180: no limit.',
+  join: 'Share of anneal moves that merge two lines with a shared end station.',
 };
 const UNIT: Record<string, string> = {
   spacing: 'm',
@@ -59,7 +64,7 @@ const UNIT: Record<string, string> = {
   maxKm: 'km',
 };
 const field = (k: string) =>
-  `<label${k === 'algo' ? ' class="wide"' : ''} title="${HINT[k] ?? ''}">${k}<input name="${k}" value="${value(k)}"></label>`;
+  `<label${k === 'algo' || k === 'shapes' ? ' class="wide"' : ''} title="${HINT[k] ?? ''}">${k}<input name="${k}" value="${value(k)}"></label>`;
 const grouped = new Set([...GROUPS.flatMap(([, ks]) => ks), 'tiers']);
 const groups = [
   ...GROUPS,
@@ -303,7 +308,7 @@ function drawKey(max: number, s: Snap) {
   };
   const tiers =
     lineMode.value === 'by line'
-      ? `<div id="lines">${s.lines.map((l, i) => `<div>${svgLine(lineColor(l, i), STYLE[l.tier][1])} line ${i + 1}: ${l.tier}, ${l.stops.length} stops, ${((l.path.length * (city?.cellM ?? 0)) / 1000).toFixed(0)} km</div>`).join('')}</div>`
+      ? `<div id="lines">${s.lines.map((l, i) => `<div>${svgLine(lineColor(l, i), STYLE[l.tier][1])} line ${i + 1}: ${l.tier} ${l.shape}${l.loop ? ' loop' : ''}, ${l.stops.length} stops, ${((l.path.length * (city?.cellM ?? 0)) / 1000).toFixed(0)} km</div>`).join('')}</div>`
       : (params?.tiers ?? Object.keys(STYLE))
           .map(
             (t) => `<p>${svgLine(STYLE[t][0], STYLE[t][1])} ${tierText(t)}</p>`,
@@ -404,10 +409,12 @@ function draw() {
     );
   const lines = ids.map((i) => {
     const l = s.lines[i];
+    // A loop draws back to its first stop.
+    const st = l.loop ? [...l.stops, l.stops[0]] : l.stops;
     return {
       ...l,
-      path: l.stops
-        .flatMap((c, k) => (k ? legs(l.stops[k - 1], c).slice(1) : [c]))
+      path: st
+        .flatMap((c, k) => (k ? legs(st[k - 1], c).slice(1) : [c]))
         .flatMap((c, k, p) => (k ? cells(p[k - 1], c) : [c])),
     };
   });
@@ -415,7 +422,7 @@ function draw() {
     lineMode.value === 'by line' ? u : STYLE[l.tier][1] * lw;
   const { pts, stations } = layout(lines, at, width, 0.6 * u);
   // Rounded corners: each bend is an arc no wider than half of either leg.
-  const stroke = (all: Pt[]) => {
+  const stroke = (all: Pt[], loop: boolean) => {
     // Remove points where the line goes straight on, so corners get their full radius.
     const p = all.filter((q, k) => {
       if (k === 0 || k === all.length - 1) return true;
@@ -437,13 +444,14 @@ function draw() {
       );
     }
     ctx.lineTo(...p[p.length - 1]);
+    if (loop) ctx.closePath();
     ctx.stroke();
   };
   ctx.lineCap = ctx.lineJoin = 'round';
   lines.forEach((l, j) => {
     ctx.strokeStyle = lineColor(l, ids[j]);
     ctx.lineWidth = width(l);
-    stroke(pts[j]);
+    stroke(pts[j], l.loop);
   });
   // Tube-map stations. One line: a dot, or a tick on its side. Two or more: round nodes
   // 3u wide, one node for each three lines, touching, so they draw as one shape.
