@@ -60,6 +60,8 @@ export function checkFixtures(from: number, to: number) {
       }
       assert.equal(last.step, last.total);
       assert.ok(spent(last.net) <= p.budget + 1e-9, 'over budget');
+      for (const l of last.net.lines)
+        assert.equal(new Set(l.stops).size, l.stops.length, 'line stops twice');
       for (let k = 1; k < snaps.length; k++)
         if (snaps[k].algo === 'greedy')
           assert.ok(snaps[k].J >= snaps[k - 1].J, `greedy fell at step ${k}`);
