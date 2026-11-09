@@ -428,20 +428,22 @@ function draw() {
   // All lines at one corner share the arc centre of the cell's centre line, at radius 3u.
   // Each line's radius is its distance from that centre, so side-by-side lines stay side by side.
   const stroke = (all: Pt[], cells: Pt[], loop: boolean) => {
-    // Remove points where the line goes straight on, so corners get their full radius.
+    // Remove a point at the same place as the one before it (a merged corner), and points where
+    // the line goes straight on, so corners get their full radius.
     // Keep the tip where a line turns back on itself.
-    const keep = all.flatMap((q, k) => {
-      if (k === 0 || k === all.length - 1) return [k];
-      const [a, b] = [all[k - 1], all[k + 1]];
+    const one = all.flatMap((q, k) =>
+      k && q[0] === all[k - 1][0] && q[1] === all[k - 1][1] ? [] : [k],
+    );
+    const keep = one.filter((k, j) => {
+      if (j === 0 || j === one.length - 1) return true;
+      const [a, q, b] = [all[one[j - 1]], all[k], all[one[j + 1]]];
       const [ux, uy, vx, vy] = [
         q[0] - a[0],
         q[1] - a[1],
         b[0] - q[0],
         b[1] - q[1],
       ];
-      return Math.abs(ux * vy - uy * vx) > 1e-6 || ux * vx + uy * vy < 0
-        ? [k]
-        : [];
+      return Math.abs(ux * vy - uy * vx) > 1e-6 || ux * vx + uy * vy < 0;
     });
     const p = keep.map((k) => all[k]);
     const c = keep.map((k) => cells[k]);

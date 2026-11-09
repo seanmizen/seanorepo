@@ -180,6 +180,48 @@ export function layout(
     }),
   );
 
+  // A short leg on the inside of two close bends can run backwards: its two corners pass each
+  // other. Remove it, and put the line's corner where the legs before and after it meet, as the
+  // inside line of a double bend on the tube map. If those legs are parallel, or there is no leg
+  // on one side, use the middle of the backward leg. A removed leg has zero length.
+  pts.forEach((q, i) => {
+    const p = lines[i].path;
+    const same = (a: Pt, b: Pt) => a[0] === b[0] && a[1] === b[1];
+    // Leg j goes from q[j - 1] to q[j], on the line d · n = c.
+    const leg = (j: number) => {
+      const [nx, ny] = raw(p[j - 1], p[j]);
+      const [x, y] = at(p[j]);
+      return [nx, ny, x * nx + y * ny + off[i][j]];
+    };
+    const back = (j: number) => {
+      const [[ax, ay], [bx, by]] = [at(p[j - 1]), at(p[j])];
+      return (
+        (q[j][0] - q[j - 1][0]) * (bx - ax) +
+          (q[j][1] - q[j - 1][1]) * (by - ay) <
+        -1e-9
+      );
+    };
+    for (let k = 1; k < q.length; k++) {
+      if (!back(k)) continue;
+      let a = k - 1;
+      while (a > 0 && same(q[a - 1], q[a])) a--;
+      let b = k + 1;
+      while (b < q.length && same(q[b - 1], q[b])) b++;
+      let m: Pt = [(q[k - 1][0] + q[k][0]) / 2, (q[k - 1][1] + q[k][1]) / 2];
+      if (a > 0 && b < q.length) {
+        const [[ax, ay, ac], [bx, by, bc]] = [leg(a), leg(b)];
+        const det = ax * by - ay * bx;
+        if (Math.abs(det) > 1e-6)
+          m = [(ac * by - bc * ay) / det, (ax * bc - bx * ac) / det];
+      }
+      for (let j = a; j < b; j++) q[j] = m;
+      // A loop's first and last points are one corner.
+      if (lines[i].loop && a === 0) q[q.length - 1] = m;
+      if (lines[i].loop && b === q.length) q[0] = m;
+      k = 0;
+    }
+  });
+
   const stations = new Map<number, { i: number; p: Pt }[]>();
   lines.forEach((l, i) => {
     for (const c of l.stops) {

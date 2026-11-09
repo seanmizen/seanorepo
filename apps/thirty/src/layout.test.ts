@@ -105,13 +105,21 @@ const left = (at: (c: number) => Pt, a: number, b: number, q: Pt) => {
 
 // Each drawn segment keeps one offset from its cell step, so a corner point lies on both of
 // its legs. A corner point off a leg makes the stroke step out and back: a stub at the corner.
+// A merged corner (two points at one place) is the exception: where the legs on each side of
+// a removed backward leg are parallel, they meet at its midpoint.
 for (const i of [22, 27, 28])
   for (const k of [4, 0.25])
     test(`${i + 1}: every corner lies on both of its legs at zoom ${k}`, () => {
       const { lines, at, pts } = drawn(i, k);
       const bad: string[] = [];
-      lines.forEach(({ path: p }, j) => {
+      const same = (a?: Pt, b?: Pt) => a && b && a[0] === b[0] && a[1] === b[1];
+      lines.forEach(({ path: p, loop }, j) => {
+        // A loop's first and last points are one corner.
+        const q = loop
+          ? [pts[j].at(-2), ...pts[j], pts[j][1]]
+          : [undefined, ...pts[j]];
         for (let s = 1; s < p.length; s++) {
+          if (same(q[s - 1], q[s]) || same(q[s + 1], q[s + 2])) continue;
           const d =
             left(at, p[s - 1], p[s], pts[j][s - 1]) -
             left(at, p[s - 1], p[s], pts[j][s]);
@@ -171,3 +179,21 @@ for (const i of [22, 27, 28])
     });
     assert.deepEqual(bad.slice(0, 10), [], `${bad.length} swaps`);
   });
+
+// Each drawn leg runs the same way as its cell step. A leg whose two corners pass each other
+// runs backwards, and the stroke goes out and back: a stub on the inside of a double bend.
+for (const i of [22, 27, 28])
+  for (const k of [4, 0.25])
+    test(`${i + 1}: no leg runs backwards at zoom ${k}`, () => {
+      const { lines, at, pts } = drawn(i, k);
+      const bad: string[] = [];
+      lines.forEach(({ path: p }, j) => {
+        for (let s = 1; s < p.length; s++) {
+          const [[ax, ay], [bx, by]] = [at(p[s - 1]), at(p[s])];
+          const [q, r] = [pts[j][s - 1], pts[j][s]];
+          if ((r[0] - q[0]) * (bx - ax) + (r[1] - q[1]) * (by - ay) < -1e-6)
+            bad.push(`line ${j} step ${s}`);
+        }
+      });
+      assert.deepEqual(bad.slice(0, 10), [], `${bad.length} backward legs`);
+    });
