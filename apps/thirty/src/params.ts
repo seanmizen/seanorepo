@@ -80,7 +80,7 @@ export const DEFAULTS = {
   snap: 0, // radius, as a share of spacing, to move a stop to a station
   tiers: 'tram,tube,rer,express',
   shapes: 'line:1', // line shapes and their weights
-  turn: 180, // largest turn in degrees at a via point or a join station
+  turn: 105, // largest turn in degrees at a via point or a join station
   join: 0, // share of anneal moves that merge two lines
   gpu: 1, // 1: score on the GPU if the browser has WebGPU. 0: on the CPU
 };
