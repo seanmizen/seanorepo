@@ -21,7 +21,9 @@ export const load = (p: Params) =>
 const cache = new Map<string, { hash: string; snaps: Snap[] }>();
 function finish(qs: string) {
   const p = parse(qs);
-  const snaps = [...run(load(p), p)];
+  const snaps = [...run(load(p), p)].filter(
+    (s): s is Snap => !Array.isArray(s),
+  );
   return { p, snaps, hash: hashNet(snaps[snaps.length - 1].net) };
 }
 

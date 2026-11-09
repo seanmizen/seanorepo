@@ -325,21 +325,18 @@ a dot or a tick (the Stops picker): a stop on one line. A round node: an interch
 <p><small>Scroll to zoom. Drag to pan. Double-click to reset.</small></p>`;
 }
 
-let keyFor = '';
-function draw() {
-  const s = snaps[Number(slider.value)];
-  if (!city || !s) return;
+// The map layer (hillshade and values) of one snapshot, one pixel for each cell.
+// draw() makes it again only when the snapshot or the layer changes, so pan and zoom only copy it.
+let mapFor = '';
+let map = new OffscreenCanvas(1, 1);
+let max = 1e-12;
+function drawMap(s: Snap) {
   const { w, elev, water, cellM } = city;
   const vals =
     { score: s.score, pop: city.pop, jobs: city.jobs, height: elev }[
       layer.value
     ] ?? s.score;
-  const max = vals.reduce((m, x) => Math.max(m, x), 1e-12);
-  const want = `${layer.value}|${lineMode.value}|${lineMode.value === 'by line' ? s.step : ''}`;
-  if (keyFor !== want) {
-    keyFor = want;
-    drawKey(max, s);
-  }
+  max = vals.reduce((m, x) => Math.max(m, x), 1e-12);
   const img = new ImageData(w, w);
   for (let i = 0; i < w * w; i++) {
     const x = i % w;
@@ -358,15 +355,31 @@ function draw() {
         );
     img.data.set([...rgb, 255], i * 4);
   }
-  const off = new OffscreenCanvas(w, w);
-  off.getContext('2d')?.putImageData(img, 0, 0);
+  map = new OffscreenCanvas(w, w);
+  map.getContext('2d')?.putImageData(img, 0, 0);
+}
+
+let keyFor = '';
+function draw() {
+  const s = snaps[Number(slider.value)];
+  if (!city || !s) return;
+  const { w, cellM } = city;
+  if (mapFor !== `${slider.value}|${layer.value}`) {
+    mapFor = `${slider.value}|${layer.value}`;
+    drawMap(s);
+  }
+  const want = `${layer.value}|${lineMode.value}|${lineMode.value === 'by line' ? s.step : ''}`;
+  if (keyFor !== want) {
+    keyFor = want;
+    drawKey(max, s);
+  }
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#111';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(view.k, 0, 0, view.k, view.x, view.y);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(map, 0, 0, canvas.width, canvas.height);
 
   // Lines get thinner relative to the map as you zoom in, so detail stays visible.
   const px = canvas.width / w;
