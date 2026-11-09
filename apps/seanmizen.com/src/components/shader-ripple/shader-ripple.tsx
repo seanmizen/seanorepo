@@ -329,6 +329,8 @@ const springStep = (
 const MASK_SCALE = 0.5;
 const MASK_PAD = 16;
 const MASK_SOFT = 40;
+/* How much the content mask hides: 1 clears content fully, 0 not at all. */
+export const MASK_OPACITY = 0.8;
 const TIGHT_PAD = 0;
 const TIGHT_SOFT = 8;
 const TIGHT = '[data-mask="tight"]';
@@ -662,6 +664,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       ...rippleUniforms,
       ...faceTaps,
       u_contentMask: contentMask.texture,
+      u_maskOpacity: { value: MASK_OPACITY },
       u_width: { value: simSize },
       u_height: { value: simSize },
       u_particleSize: { value: 0 },
@@ -733,6 +736,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
       ...rippleUniforms,
       u_tapsFrom: { value: -1 },
       u_contentMask: contentMask.texture,
+      u_maskOpacity: { value: MASK_OPACITY },
       u_tightMask: tightMask.texture,
       u_viewPx: { value: new THREE.Vector2() },
       u_cellPx: { value: new THREE.Vector2() },
