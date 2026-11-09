@@ -21,8 +21,69 @@ type Snap = {
 };
 
 const q = new URLSearchParams(location.search);
+const value = (k: string) => q.get(k) ?? defaultOf(k);
+// The setup form, in groups. A parameter in no group goes in Other, so new ones show with no UI change.
+const GROUPS: [string, string[]][] = [
+  ['City', ['city', 'seed', 'size', 'cell', 'sea', 'rivers', 'hills', 'warp']],
+  ['Run', ['algo', 'steps', 'run', 'candidates']],
+  ['Goal', ['N', 'budget']],
+  ['Stations', ['interchange', 'snap']],
+];
+const HINT: Record<string, string> = {
+  city: 'london or lisbon. Empty: generate a city.',
+  seed: 'City seed.',
+  size: 'Cells on each side.',
+  cell: 'Metres for each cell.',
+  sea: 'Share of the map under water, 0 to 1.',
+  rivers: 'Number of rivers.',
+  hills: '0 to 1.',
+  warp: 'Coast shape, 0 to 1.',
+  algo: 'greedy, anneal or random. A chain: greedy:20,anneal:100.',
+  steps: 'Steps for an algorithm with no count.',
+  run: 'Seed for the algorithm.',
+  candidates: 'Candidate lines for each greedy step.',
+  N: 'Target trip time in minutes.',
+  budget: 'Total cost of track and stations.',
+  interchange: 'Share of the station cost to stop at an existing station.',
+  snap: 'Radius to move a stop to an existing station, as a share of the tier spacing. 0: off.',
+};
+const UNIT: Record<string, string> = {
+  spacing: 'm',
+  speed: 'km/h',
+  headway: 'min',
+  dwell: 's',
+  accel: 'm/s²',
+  cost: 'per km',
+  station: 'each',
+  minKm: 'km',
+  maxKm: 'km',
+};
 const field = (k: string) =>
-  `<label>${k} <input name="${k}" value="${q.get(k) ?? defaultOf(k)}" size="6"></label> `;
+  `<label${k === 'algo' ? ' class="wide"' : ''} title="${HINT[k] ?? ''}">${k}<input name="${k}" value="${value(k)}"></label>`;
+const grouped = new Set([...GROUPS.flatMap(([, ks]) => ks), 'tiers']);
+const groups = [
+  ...GROUPS,
+  ['Other', Object.keys(DEFAULTS).filter((k) => !grouped.has(k))] as [
+    string,
+    string[],
+  ],
+]
+  .filter(([, ks]) => ks.length)
+  .map(
+    ([name, ks]) =>
+      `<fieldset><legend>${name}</legend>${ks.map(field).join('')}</fieldset>`,
+  )
+  .join('');
+const TIER_FIELDS = Object.keys(TIER_DEFAULTS.tram);
+const tiersOn = String(value('tiers')).split(',');
+const tierTable = `<fieldset><legend>Tiers</legend><div style="overflow-x:auto"><table>
+<tr><th></th>${TIER_FIELDS.map((f) => `<th>${f}<br><small>${UNIT[f] ?? ''}</small></th>`).join('')}</tr>
+${Object.keys(TIER_DEFAULTS)
+  .map(
+    (t) =>
+      `<tr><th><label><input type="checkbox" name="tier-on" value="${t}"${tiersOn.includes(t) ? ' checked' : ''}> ${t}</label></th>${TIER_FIELDS.map((f) => `<td><input name="${t}.${f}" value="${value(`${t}.${f}`)}" aria-label="${t} ${f}"></td>`).join('')}</tr>`,
+  )
+  .join('')}</table></div></fieldset>`;
 const options = (xs: string[]) =>
   xs.map((x) => `<option>${x}</option>`).join('');
 
@@ -36,6 +97,16 @@ body{margin:0;font:13px/1.35 system-ui,sans-serif;background:#fff}
 #side p,#side h3{margin:6px 0}
 #t{width:100%}
 #lines{max-height:160px;overflow-y:auto}
+fieldset{border:1px solid #ccc;margin:6px 0;padding:2px 8px 6px}
+legend{font-weight:600}
+fieldset label{display:inline-flex;flex-direction:column;width:84px;margin:2px 6px 2px 0;font-size:12px}
+fieldset label.wide{width:180px}
+fieldset input{width:100%;box-sizing:border-box}
+table{border-collapse:collapse}
+th{font-weight:500;text-align:left;font-size:12px;padding:0 2px;white-space:nowrap}
+th label{display:inline;width:auto;margin:0}
+td input{width:44px}
+input[type=checkbox]{width:auto}
 @media (max-width:700px){#side{height:auto}}
 </style>
 <div id="app"><canvas id="c"></canvas><div id="side">
@@ -44,17 +115,10 @@ body{margin:0;font:13px/1.35 system-ui,sans-serif;background:#fff}
 <p id="s">Loading…</p>
 <p><input id="t" type="range" min="0" max="0" value="0" aria-label="Step"></p>
 <p><label>Map <select id="l">${options(['score', 'pop', 'jobs', 'height'])}</select></label>
-<label>Lines <select id="m">${options(['by tier', 'by line'])}</select></label></p>
+<label>Lines <select id="m">${options(['by tier', 'by line'])}</select></label>
+<label>Stops <select id="st">${options(['dots', 'ticks'])}</select></label></p>
 <div id="k"></div>
-<form id="f"><h3>Setup</h3>${Object.keys(DEFAULTS).map(field).join('')}
-<details><summary>Tiers</summary>${Object.entries(TIER_DEFAULTS)
-  .map(
-    ([t, d]) =>
-      `<p>${t}: ${Object.keys(d)
-        .map((k) => field(`${t}.${k}`))
-        .join('')}</p>`,
-  )
-  .join('')}</details>
+<form id="f"><h3>Setup</h3>${groups}${tierTable}
 <p><button>Run</button> <a href="?">Reset</a> · cities: <a href="?city=london">London</a> <a href="?city=lisbon">Lisbon</a></p></form>
 <p><small>commit ${GIT_SHA}${q.get('city') ? ' · Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus' : ''}</small></p>
 </div></div>`;
@@ -66,6 +130,7 @@ const slider = $<HTMLInputElement>('t');
 const stats = $('s');
 const layer = $<HTMLSelectElement>('l');
 const lineMode = $<HTMLSelectElement>('m');
+const stopMode = $<HTMLSelectElement>('st');
 const form = $<HTMLFormElement>('f');
 const key = $('k');
 
@@ -82,8 +147,12 @@ addEventListener('resize', fit);
 form.onsubmit = (e) => {
   e.preventDefault();
   const out = new URLSearchParams();
-  for (const [k, v] of new FormData(form))
-    if (String(v) !== String(defaultOf(k))) out.set(k, String(v));
+  const data = new FormData(form);
+  for (const [k, v] of data)
+    if (k !== 'tier-on' && String(v) !== String(defaultOf(k)))
+      out.set(k, String(v));
+  const tiers = data.getAll('tier-on').join(',');
+  if (tiers !== DEFAULTS.tiers) out.set('tiers', tiers);
   location.search = out.toString().replace(/%2C/g, ',').replace(/%3A/g, ':');
 };
 
@@ -109,6 +178,7 @@ worker.postMessage(q.toString());
 slider.oninput = () => draw();
 layer.onchange = () => draw();
 lineMode.onchange = () => draw();
+stopMode.onchange = () => draw();
 
 // Zoom and pan. The view maps canvas pixels at zoom 1 to canvas pixels now.
 const view = { k: 1, x: 0, y: 0 };
@@ -246,7 +316,7 @@ function drawKey(max: number, s: Snap) {
 <p>${swatch(SEA)} sea, lake: no walking ${swatch(RIVER)} river: walking ×5</p>
 ${tiers}
 <p><svg width="56" height="16" style="background:#222;vertical-align:middle"><line x1="2" y1="8" x2="16" y2="8" stroke="#ff9f0a" stroke-width="3"/><line x1="9" y1="8" x2="9" y2="3" stroke="#ff9f0a" stroke-width="2"/><circle cx="30" cy="8" r="5" fill="#fff" stroke="#000"/><circle cx="40" cy="8" r="5" fill="#fff" stroke="#000"/><circle cx="35" cy="8" r="4" fill="#fff"/></svg>
-a tick: a stop on one line. A round node: an interchange, one node for each three lines. Lines run straight between stations, then 45°. The drawing is a diagram: the real track follows the land.</p>
+a dot or a tick (the Stops picker): a stop on one line. A round node: an interchange, one node for each three lines. Lines run straight between stations, then 45°. The drawing is a diagram: the real track follows the land.</p>
 <p><small>Scroll to zoom. Drag to pan. Double-click to reset.</small></p>`;
 }
 
@@ -375,9 +445,21 @@ function draw() {
     ctx.lineWidth = width(l);
     stroke(pts[j]);
   });
-  // Tube-map stations. One line: a tick on its side. Two or more: round nodes 3u wide,
-  // one node for each three lines, touching, so they draw as one shape.
+  // Tube-map stations. One line: a dot, or a tick on its side. Two or more: round nodes
+  // 3u wide, one node for each three lines, touching, so they draw as one shape.
   for (const list of stations.values()) {
+    if (list.length === 1 && stopMode.value === 'dots') {
+      for (const [color, r] of [
+        ['#000', 0.9 * u + 0.5 * lw],
+        ['#fff', 0.9 * u - 0.5 * lw],
+      ] as const) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(...list[0].p, r, 0, 7);
+        ctx.fill();
+      }
+      continue;
+    }
     if (list.length === 1) {
       const { i, p } = list[0];
       const path = pts[i];
