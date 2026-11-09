@@ -116,6 +116,10 @@ describe('obell-snapshot', () => {
     expect(changed.summary).toContain('1 line added, 1 line removed');
     expect(changed.detail).toContain('-<p>one</p>');
     expect(changed.detail).toContain('+<p>two</p>');
+    expect(changed.summary).toContain('Email: off.');
+    expect(devOutbox.map((e) => e.subject)).toEqual(['obell.dev changed']);
+    expect(devOutbox[0].text).toContain('1 line added, 1 line removed');
+    expect(devOutbox[0].text).toContain('+<p>two</p>');
   });
 
   test('a bad answer is an error', async () => {

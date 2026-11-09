@@ -1,12 +1,16 @@
 /**
  * Fetch obell.dev and compare it with the last snapshot. When the page
- * changed, the run is a notice, and its detail is the diff.
+ * changed, the run is a notice, its detail is the diff, and the job sends
+ * one email with the diff. The first snapshot sends no email.
  */
 
 import { createTwoFilesPatch } from 'diff';
 import type { Job } from '../job';
 
 const URL = 'https://obell.dev';
+
+const london = (iso: string) =>
+  new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London' });
 
 interface Snapshot {
   body: string;
@@ -17,7 +21,8 @@ interface Snapshot {
 export const obellSnapshot: Job = {
   id: 'obell-snapshot',
   title: 'obell.dev snapshot',
-  description: 'Fetch obell.dev, and show a diff when the page changes.',
+  description:
+    'Fetch obell.dev. When the page changes, show the diff here and email it to Sean.',
   schedule: '0 * * * *',
   run: async (ctx) => {
     const res = await fetch(URL, { signal: AbortSignal.timeout(20_000) });
@@ -54,9 +59,23 @@ export const obellSnapshot: Job = {
       (l) => l.startsWith('-') && !l.startsWith('---'),
     ).length;
     const count = (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`;
+    const change = `${count(added)} added, ${count(removed)} removed`;
+    const email = await ctx.email(
+      'obell.dev changed',
+      [
+        `${URL} changed: ${change}.`,
+        '',
+        `Last snapshot: ${london(last.since)} (London)`,
+        `This snapshot: ${london(now)}`,
+        '',
+        'https://seanmizen.com/cron',
+        '',
+        patch,
+      ].join('\n'),
+    );
     return {
       status: 'notice',
-      summary: `The page changed: ${count(added)} added, ${count(removed)} removed.`,
+      summary: `The page changed: ${change}. Email: ${email}.`,
       detail: patch,
     };
   },
