@@ -1,7 +1,7 @@
 import { fromBytes, genCity } from './gen.ts';
 import { gpu } from './gpu.ts';
-import type { Eval, Prep } from './graph.ts';
-import { hashNet, run, SAMPLES, type Snap, spent } from './net.ts';
+import { type Eval, type Prep, samples } from './graph.ts';
+import { hashNet, run, type Snap, spent } from './net.ts';
 import { parse } from './params.ts';
 import { pool } from './pool.ts';
 
@@ -14,7 +14,8 @@ self.onmessage = async ({ data }: MessageEvent<string>) => {
     const res = p.city ? await fetch(`/cities/${p.city}.bin`) : null;
     if (res && !res.ok) throw new Error(`Unknown city: ${p.city}.`);
     const city = res ? fromBytes(await res.arrayBuffer(), p.city) : genCity(p);
-    const score = p.gpu ? await gpu(city, p, SAMPLES) : null;
+    const S = samples(city, p);
+    const score = p.gpu ? await gpu(city, p, S) : null;
     postMessage({ type: 'city', city, gpu: !!score });
     const job = pool(city, data);
     // The pool evaluates each snapshot with 256 samples. The chain posts the snapshots in step order.
@@ -43,12 +44,10 @@ self.onmessage = async ({ data }: MessageEvent<string>) => {
     for (let r = steps.next(); !r.done; ) {
       const s = r.value;
       if (Array.isArray(s)) {
-        const all = <T>(prep: boolean) =>
-          Promise.all(s.map((net) => job<T>({ net, S: SAMPLES, prep })));
+        const all = <T>(out: 'prep' | 'J') =>
+          Promise.all(s.map((net) => job<T>({ net, S, out })));
         r = steps.next(
-          score
-            ? await score(await all<Prep>(true))
-            : (await all<Eval>(false)).map((e) => e.J),
+          score ? await score(await all<Prep>('prep')) : await all<number>('J'),
         );
       } else {
         post(s);

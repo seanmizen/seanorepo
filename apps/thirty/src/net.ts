@@ -1,5 +1,12 @@
 import { type City, cellDist, mulberry32, type Rng } from './gen.ts';
-import { csr, dijkstra, evaluate, type Graph, gridEdges } from './graph.ts';
+import {
+  csr,
+  dijkstra,
+  evaluate,
+  type Graph,
+  gridEdges,
+  samples,
+} from './graph.ts';
 import type { Params } from './params.ts';
 
 // shape: the generator that made the line (a key of SHAPES), or 'join'.
@@ -421,9 +428,6 @@ export type Snap = {
   J: number;
 };
 
-// The job samples of J, the score that the algorithms maximise.
-export const SAMPLES = 32;
-
 // Runs the chain. Each segment ends at the best network it saw.
 // It yields a Snap after each step, and the networks of each Batch before its then().
 // The caller can send back the score of each network with next(). If it sends nothing, run() scores them.
@@ -432,8 +436,9 @@ export function* run(
   p: Params,
 ): Generator<Snap | Net[], void, number[] | undefined> {
   const memo = new WeakMap<Net, number>();
+  const S = samples(city, p);
   const J = (n: Net) => {
-    const v = memo.get(n) ?? evaluate(city, n, p, SAMPLES).J;
+    const v = memo.get(n) ?? evaluate(city, n, p, S).J;
     memo.set(n, v);
     return v;
   };

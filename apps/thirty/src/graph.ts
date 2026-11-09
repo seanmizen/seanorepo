@@ -198,6 +198,10 @@ function walkFrom(city: City, c: number, max: number) {
   return near;
 }
 
+// S, the job samples of J: p.samples, at most the number of cells with jobs.
+export const samples = (city: City, p: Params) =>
+  Math.min(p.samples, city.jobs.filter((x) => x > 0).length);
+
 // S destination cells, spread evenly along the jobs CDF. No randomness.
 const sampleCache = new WeakMap<City, Map<number, number[]>>();
 function jobSamples(city: City, S: number) {
