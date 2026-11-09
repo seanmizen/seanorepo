@@ -34,7 +34,7 @@ use their host ports. See `infra/edge/README.md`.
 
 | Port | Service |
 |---|---|
-| 4000 | seanmizen.com |
+| 4000 / 4001 | seanmizen.com FE / apps/cron (the jobs, and `/api/cron` for seanmizen.com/cron) |
 | 4010 / 4011 | seanscards FE / BE. Local only. Not deployed. |
 | 4020 / 4021 | carolinemizen.art FE / BE |
 | 4030 / 4031 | planning-poker FE / BE |

@@ -75,9 +75,10 @@ test_cloudflared() {
 
   local failed=0
 
-  # Test seanmizen.com (Frontend only)
+  # Test seanmizen.com (FE + apps/cron)
   echo -e "\n${YELLOW}seanmizen.com${NC}"
   test_endpoint "http://localhost:4000" "Frontend" || ((failed++))
+  test_endpoint "http://localhost:4001/api/health" "Cron" || ((failed++))
 
   # Test carolinemizen.art (FE + BE)
   echo -e "\n${YELLOW}carolinemizen.art${NC}"

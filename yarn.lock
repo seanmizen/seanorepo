@@ -7300,6 +7300,36 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"cron@workspace:apps/cron":
+  version: 0.0.0-use.local
+  resolution: "cron@workspace:apps/cron"
+  dependencies:
+    "@types/nodemailer": "npm:^7.0.4"
+    bun-types: "npm:^1.3.4"
+    croner: "npm:^10.0.1"
+    cronstrue: "npm:^3.38.0"
+    diff: "npm:^9.0.0"
+    nodemailer: "npm:^7.0.11"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
+
+"croner@npm:^10.0.1":
+  version: 10.0.1
+  resolution: "croner@npm:10.0.1"
+  checksum: 10c0/b1a022f8c786b19799e662e0f11686937e97133e386efa2859e316ba64b7a9c2ecd0d1500cdbe3157625ff7e9af8584c7d6e41c9a17db892c731f83be464bc92
+  languageName: node
+  linkType: hard
+
+"cronstrue@npm:^3.38.0":
+  version: 3.38.0
+  resolution: "cronstrue@npm:3.38.0"
+  bin:
+    cronstrue: bin/cli.js
+  checksum: 10c0/629cdb29c62101f4b6a9218b03bebf695af9e27bd1a7a02ec6b141311674e59d6cf3e1af9705057d82f18deffb687bb71864e0a948422f664d162ef762563daa
+  languageName: node
+  linkType: hard
+
 "cross-spawn@npm:^7.0.2, cross-spawn@npm:^7.0.3, cross-spawn@npm:^7.0.5, cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
@@ -7597,6 +7627,13 @@ __metadata:
   version: 4.0.2
   resolution: "diff@npm:4.0.2"
   checksum: 10c0/81b91f9d39c4eaca068eb0c1eb0e4afbdc5bb2941d197f513dd596b820b956fef43485876226d65d497bebc15666aa2aa82c679e84f65d5f2bfbf14ee46e32c1
+  languageName: node
+  linkType: hard
+
+"diff@npm:^9.0.0":
+  version: 9.0.0
+  resolution: "diff@npm:9.0.0"
+  checksum: 10c0/a971cc88f66071a33bd3942db2f51b57d484e9856265ae45cf44fb28ab2fde91f132d9c26d8be0fb6082d2be94d29e1295c1adb251b7461935d6a2dd304cd161
   languageName: node
   linkType: hard
 

@@ -32,9 +32,15 @@ ingress:
   - hostname: inside.seanmizen.com
     service: http://localhost:4060
 
-  # seanmizen.com - Port 4000 (Frontend only)
+  # seanmizen.com - Ports 4000 (FE) / 4001 (apps/cron: the data of /cron)
+  - hostname: seanmizen.com
+    path: /api/*
+    service: http://localhost:4001
   - hostname: seanmizen.com
     service: http://localhost:4000
+  - hostname: www.seanmizen.com
+    path: /api/*
+    service: http://localhost:4001
   - hostname: www.seanmizen.com
     service: http://localhost:4000
 

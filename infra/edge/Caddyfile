@@ -12,7 +12,12 @@
 }
 
 http://seanmizen.{$EDGE_HOST}.local {
-	reverse_proxy seanmizen-com:4000
+	handle /api/* {
+		reverse_proxy cron:4001
+	}
+	handle {
+		reverse_proxy seanmizen-com:4000
+	}
 }
 
 http://carolinemizen.{$EDGE_HOST}.local {
