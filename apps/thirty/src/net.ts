@@ -64,11 +64,15 @@ function through(city: City, ways: number[]) {
     path.push(...part.slice(1));
     at.add(path.length - 1);
   }
+  // A path that visits a cell twice runs over its own track. Only a loop may end where it starts.
+  const loop = ways[0] === ways[ways.length - 1];
+  if (new Set(path).size < path.length - (loop ? 1 : 0)) return null;
   return { path, at };
 }
 
 // Stops at the tier spacing, on land only. The last stop is the end of the path.
-// If "at" is given, the stops are at those path indices only.
+// "at": path indices that must be stops. With "only", the stops are at those indices only.
+// A spacing stop less than half a spacing before a must-stop moves to that must-stop.
 // A loop path ends at its first cell. That last stop is removed, and its segment closes the loop.
 // A new station costs t.station. A stop at a station in "have" costs p.interchange of that.
 // The cost is fixed when the line is made. It does not change when other lines change.
@@ -81,30 +85,29 @@ function makeLine(
   shape: string,
   loop: boolean,
   at?: Set<number>,
+  only = false,
 ): Line {
   const t = p.tierDefs[tier];
   const stops = [path[0]];
   const segs: number[] = [];
   let since = 0;
   let cost = 0;
+  let fixed = true; // the last stop is a must-stop
   for (let k = 1; k < path.length; k++) {
     const d = cellDist(path[k - 1], path[k], city.w) * city.cellM;
     since += d;
     cost += buildW(city, path[k - 1], path[k], d);
-    const end = k === path.length - 1;
-    if (at) {
-      if (at.has(k)) {
-        stops.push(path[k]);
-        segs.push(since);
-        since = 0;
-      }
-    } else if (end && since < t.spacing / 2 && stops.length > 1) {
+    const must = k === path.length - 1 || !!at?.has(k);
+    if (!only && must && since < t.spacing / 2 && !fixed) {
       stops[stops.length - 1] = path[k];
       segs[segs.length - 1] += since;
-    } else if (end || (since >= t.spacing && !city.water[path[k]])) {
+      since = 0;
+      fixed = true;
+    } else if (must || (!only && since >= t.spacing && !city.water[path[k]])) {
       stops.push(path[k]);
       segs.push(since);
       since = 0;
+      fixed = must;
     }
   }
   if (loop) stops.pop();
@@ -135,7 +138,7 @@ function snapped(city: City, p: Params, l: Line, have: Set<number>) {
   if (l.loop && ways[ways.length - 1] !== ways[0]) ways.push(ways[0]);
   const t = through(city, ways);
   if (!t) return null;
-  return makeLine(city, p, l.tier, t.path, have, l.shape, l.loop, t.at);
+  return makeLine(city, p, l.tier, t.path, have, l.shape, l.loop, t.at, true);
 }
 
 const cdfCache = new WeakMap<Float32Array, Float64Array>();
@@ -200,7 +203,8 @@ function homeNear(city: City, x: number, y: number) {
   return best;
 }
 
-// A line through the ways. The routed length must be from minKm to 2 x maxKm.
+// A line through the ways, with a stop at each way. The routed length must be from
+// minKm to 2 x maxKm.
 function routed(
   city: City,
   p: Params,
@@ -217,7 +221,7 @@ function routed(
   for (let k = 1; k < r.path.length; k++)
     m += cellDist(r.path[k - 1], r.path[k], city.w) * city.cellM;
   if (m / 1000 < t.minKm || m / 1000 > 2 * t.maxKm) return null;
-  return makeLine(city, p, tier, r.path, have, shape, loop);
+  return makeLine(city, p, tier, r.path, have, shape, loop, r.at);
 }
 
 // Line shapes. Each makes one random line of the tier, or null if the try fails.
