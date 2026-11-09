@@ -22,7 +22,10 @@ export type Ctx = {
   J: (n: Net) => number;
 };
 // One step of an algorithm. Add one: write the function, add it to ALGOS.
-export type Algo = (net: Net, ctx: Ctx) => Net;
+// A step can return a Batch: the networks it scores, and the rest of the step.
+// run() yields the networks, so a caller can score them in parallel before then() runs.
+export type Batch = { score: Net[]; then: () => Net };
+export type Algo = (net: Net, ctx: Ctx) => Net | Batch;
 
 // Build weight in metres: slope and water make a line cost more.
 const buildW = (city: City, i: number, j: number, d: number) =>
@@ -41,7 +44,7 @@ function route(city: City, a: number, b: number) {
     buildCache.set(city, g);
   }
   const prev = new Int32Array(g.n);
-  dijkstra(g, a, new Float64Array(g.n), Number.POSITIVE_INFINITY, b, prev);
+  dijkstra([g], a, Number.POSITIVE_INFINITY, b, prev);
   const path = [b];
   while (path[0] !== a) {
     if (prev[path[0]] < 0) return null;
@@ -280,10 +283,10 @@ function pick(shapes: [string, number][], rng: Rng) {
   return shapes[shapes.length - 1][0];
 }
 
-// The network with one more random line of a random tier and shape.
-// The line fits in the budget left. The new line is the last line.
-// If snap > 0, a snapped variant is made too. The one with more gain per cost is kept.
-function candidate(c: Ctx, net: Net, left: number): Net | null {
+// The network with one more random line of a random tier and shape, and with snap > 0
+// a snapped variant too. The line fits in the budget left. The new line is the last line.
+// Empty if 20 tries make no line. options() uses c.rng and never c.J.
+function options(c: Ctx, net: Net, left: number): Net[] {
   const { city, p, rng } = c;
   const have = new Set(net.lines.flatMap((l) => l.stops));
   for (let tries = 0; tries < 20; tries++) {
@@ -293,15 +296,20 @@ function candidate(c: Ctx, net: Net, left: number): Net | null {
     const ns = [plain, p.snap > 0 ? snapped(city, p, plain, have) : null]
       .filter((l): l is Line => !!l && l.cost <= left && l.stops.length > 1)
       .map((l) => add(net, l));
-    if (ns.length < 2) {
-      if (ns.length) return ns[0];
-      continue;
-    }
-    const gain = (n: Net) => (c.J(n) - c.J(net)) / last(n).cost;
-    return gain(ns[1]) > gain(ns[0]) ? ns[1] : ns[0];
+    if (ns.length) return ns;
   }
-  return null;
+  return [];
 }
+
+// Of the options, the one with more gain per cost. Null if there is no option.
+function choose(c: Ctx, net: Net, ns: Net[]): Net | null {
+  if (ns.length < 2) return ns[0] ?? null;
+  const gain = (n: Net) => (c.J(n) - c.J(net)) / last(n).cost;
+  return gain(ns[1]) > gain(ns[0]) ? ns[1] : ns[0];
+}
+
+const candidate = (c: Ctx, net: Net, left: number) =>
+  choose(c, net, options(c, net, left));
 
 const flip = (l: Line): Line => ({
   ...l,
@@ -361,16 +369,23 @@ export const ALGOS: Record<string, Algo> = {
   },
   // Add the candidate with the best gain per cost. Adding a line never makes a trip slower.
   greedy: (net, c) => {
-    const j0 = c.J(net);
-    let best = net;
-    let gain = 0;
-    for (let i = 0; i < c.p.candidates; i++) {
-      const n2 = candidate(c, net, c.p.budget - spent(net));
-      if (!n2) continue;
-      const g = (c.J(n2) - j0) / last(n2).cost;
-      if (g > gain) [best, gain] = [n2, g];
-    }
-    return best;
+    const left = c.p.budget - spent(net);
+    const opts = Array.from({ length: c.p.candidates }, () =>
+      options(c, net, left),
+    );
+    const then = () => {
+      const j0 = c.J(net);
+      let best = net;
+      let gain = 0;
+      for (const o of opts) {
+        const n2 = choose(c, net, o);
+        if (!n2) continue;
+        const g = (c.J(n2) - j0) / last(n2).cost;
+        if (g > gain) [best, gain] = [n2, g];
+      }
+      return best;
+    };
+    return { score: opts.flat(), then };
   },
   // Merge two lines (share p.join of moves), or add, remove or replace one line.
   // Sometimes keep a worse network, less often as the run continues.
@@ -402,11 +417,19 @@ export type Snap = {
   J: number;
 };
 
+// The job samples of J, the score that the algorithms maximise.
+export const SAMPLES = 32;
+
 // Runs the chain. Each segment ends at the best network it saw.
-export function* run(city: City, p: Params): Generator<Snap> {
+// It yields a Snap after each step, and the networks of each Batch before its then().
+// The caller can send back the score of each network with next(). If it sends nothing, run() scores them.
+export function* run(
+  city: City,
+  p: Params,
+): Generator<Snap | Net[], void, number[] | undefined> {
   const memo = new WeakMap<Net, number>();
   const J = (n: Net) => {
-    const v = memo.get(n) ?? evaluate(city, n, p, 32).J;
+    const v = memo.get(n) ?? evaluate(city, n, p, SAMPLES).J;
     memo.set(n, v);
     return v;
   };
@@ -418,7 +441,12 @@ export function* run(city: City, p: Params): Generator<Snap> {
   for (const [algo, count] of p.chain) {
     let best = net;
     for (let k = 0; k < count; k++) {
-      net = ALGOS[algo](net, { city, p, rng, frac: k / count, J });
+      const r = ALGOS[algo](net, { city, p, rng, frac: k / count, J });
+      if ('score' in r) {
+        const js = yield r.score;
+        for (const [i, j] of js?.entries() ?? []) memo.set(r.score[i], j);
+        net = r.then();
+      } else net = r;
       if (J(net) > J(best)) best = net;
       if (k === count - 1) net = best;
       yield { step: ++step, total, algo, net, J: J(net) };
