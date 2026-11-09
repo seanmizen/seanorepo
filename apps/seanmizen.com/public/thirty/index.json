@@ -1,0 +1,122 @@
+[
+  {
+    "file": "0.bin.gz",
+    "url": "?seed=101&size=128&sea=0.1&rivers=3&hills=0.2",
+    "size": 128,
+    "steps": 30
+  },
+  {
+    "file": "1.bin.gz",
+    "url": "?seed=102&size=160&sea=0.35&rivers=1&hills=0.3",
+    "size": 160,
+    "steps": 30
+  },
+  {
+    "file": "2.bin.gz",
+    "url": "?seed=103&size=128&sea=0.55&rivers=0&warp=0.8",
+    "size": 128,
+    "steps": 30
+  },
+  {
+    "file": "3.bin.gz",
+    "url": "?seed=104&size=144&sea=0.05&rivers=2&hills=0.9",
+    "size": 144,
+    "steps": 30
+  },
+  {
+    "file": "4.bin.gz",
+    "url": "?seed=105&size=192&sea=0.25&rivers=4&hills=0.5&algo=greedy:20,anneal:60",
+    "size": 192,
+    "steps": 80
+  },
+  {
+    "file": "5.bin.gz",
+    "url": "?seed=106&size=112&sea=0.4&warp=0.6&shapes=line:1,via:1,arc:1",
+    "size": 112,
+    "steps": 30
+  },
+  {
+    "file": "6.bin.gz",
+    "url": "?seed=107&size=176&sea=0.15&rivers=5&hills=0.1&tiers=tram,tube",
+    "size": 176,
+    "steps": 30
+  },
+  {
+    "file": "7.bin.gz",
+    "url": "?seed=108&size=128&sea=0.3&hills=0.7&algo=random&steps=40",
+    "size": 128,
+    "steps": 40
+  },
+  {
+    "file": "8.bin.gz",
+    "url": "?seed=109&size=160&sea=0.6&rivers=1&warp=0.9",
+    "size": 160,
+    "steps": 30
+  },
+  {
+    "file": "9.bin.gz",
+    "url": "?seed=110&size=200&sea=0.08&rivers=2&goal=revenue&shapes=line:1,link:1",
+    "size": 200,
+    "steps": 30
+  },
+  {
+    "file": "10.bin.gz",
+    "url": "?seed=111&size=96&sea=0.45&rivers=0&hills=0.4",
+    "size": 96,
+    "steps": 30
+  },
+  {
+    "file": "11.bin.gz",
+    "url": "?seed=112&size=144&sea=0.2&rivers=3&hills=0.6&algo=greedy:20,anneal:100",
+    "size": 144,
+    "steps": 120
+  },
+  {
+    "file": "12.bin.gz",
+    "url": "?seed=113&size=128&sea=0.12&rivers=1&warp=0.1&tiers=rer,express",
+    "size": 128,
+    "steps": 30
+  },
+  {
+    "file": "13.bin.gz",
+    "url": "?seed=114&size=176&sea=0.5&rivers=2&hills=0.2&shapes=line:1,via:1",
+    "size": 176,
+    "steps": 30
+  },
+  {
+    "file": "14.bin.gz",
+    "url": "?seed=115&size=160&sea=0.02&rivers=1&hills=1",
+    "size": 160,
+    "steps": 30
+  },
+  {
+    "file": "15.bin.gz",
+    "url": "?seed=116&size=128&sea=0.3&rivers=4&warp=0.5&algo=anneal&steps=150",
+    "size": 128,
+    "steps": 150
+  },
+  {
+    "file": "16.bin.gz",
+    "url": "?seed=117&size=208&sea=0.38&hills=0.8&algo=greedy:30,anneal:60&candidates=16",
+    "size": 208,
+    "steps": 90
+  },
+  {
+    "file": "17.bin.gz",
+    "url": "?seed=118&size=112&sea=0.18&rivers=2&hills=0.3&shapes=line:1,arc:1",
+    "size": 112,
+    "steps": 30
+  },
+  {
+    "file": "18.bin.gz",
+    "url": "?seed=119&size=144&sea=0.65&rivers=1&warp=0.7&N=45",
+    "size": 144,
+    "steps": 30
+  },
+  {
+    "file": "19.bin.gz",
+    "url": "?seed=120&size=240&sea=0.22&rivers=3&hills=0.5&algo=greedy:30,anneal:40",
+    "size": 240,
+    "steps": 70
+  }
+]

@@ -22,6 +22,7 @@
     "voxel": "yarn workspace voxel.seanmizen.com start",
     "qc": "yarn workspace quarter-company qc",
     "autosam": "yarn workspace autosam start",
+    "thirty:bake": "yarn workspace thirty bake",
     "ascii": "node utils/image-to-ascii/src/cli.mjs",
     "ascii-go": "go run -C utils/image-to-ascii ./cmd/image-to-ascii",
     "start:docker": "yarn workspaces foreach -Apt run start:docker",

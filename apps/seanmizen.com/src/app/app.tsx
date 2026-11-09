@@ -12,7 +12,14 @@ import {
 import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { StoryPage, stories } from '@/features';
 import { ThemeContext, ThemeProvider } from '@/providers';
-import { BabyComeBack, HireLab, Home, Projects, Shaders } from './routes';
+import {
+  BabyComeBack,
+  HireLab,
+  Home,
+  Projects,
+  Shaders,
+  ThirtyPreview,
+} from './routes';
 import '../index.css';
 
 /* What the home page and /projects share. It stays mounted as you move
@@ -67,6 +74,7 @@ const App: FC = () => {
           <Route path="/cous" element={<CousMoved />} />
           <Route path="/shaders" element={<ShadersMoved />} />
           <Route path="/projects/shaders" element={<Shaders />} />
+          <Route path="/projects/shaders/thirty" element={<ThirtyPreview />} />
           <Route path="/shaders-hire" element={<HireLab />} />
           <Route path="/babycomeback" element={<BabyComeBack />} />
           {/* The intentionality stories: one page each. */}

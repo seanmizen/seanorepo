@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SiteTitle, ThemeToggle } from '@/components';
 import type {
   GlyphSet,
@@ -171,6 +172,10 @@ const Shaders: FC = () => {
           <span className={styles.fps}>{fps.toFixed(0)} fps</span>
           <ThemeToggle mode={mode} toggleMode={toggleMode} />
         </header>
+        <p className={styles.hint}>
+          Also: the <Link to="/projects/shaders/thirty">thirty background</Link>
+          , a baked transit network.
+        </p>
 
         <section className={styles.section}>
           <label className={styles.heading} htmlFor="ripple-settings">
