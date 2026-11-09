@@ -18,6 +18,8 @@ type PortraitProps = {
   thrown?: boolean;
   /* The element the core lands in the middle of. */
   landing?: RefObject<HTMLElement | null>;
+  /* Start as a landed core, with no face. */
+  landed?: boolean;
   ref?: Ref<ShaderRippleHandle>;
 };
 
@@ -28,6 +30,7 @@ const Portrait: FC<PortraitProps> = ({
   reveal = false,
   thrown = false,
   landing,
+  landed = false,
   ref,
 }) => {
   const narrow = useMatchMedia(NARROW);
@@ -41,6 +44,7 @@ const Portrait: FC<PortraitProps> = ({
         reveal={reveal}
         thrown={thrown}
         landing={landing}
+        landed={landed}
         clearOfContent
         portraitScale={narrow ? 0.5 : 1}
       />

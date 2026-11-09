@@ -21,7 +21,7 @@ import vert from './vert-stippling.glsl';
 
 /* Anything a click can be aimed at, plus anything marked as UI. A click on
    one of these was meant for it, not for the background behind it. */
-export const INTERACTIVE =
+const INTERACTIVE =
   'a[href], button, input, select, textarea, summary, label, [tabindex]:not([tabindex="-1"]), [data-no-ripple]';
 
 /* Params that map straight onto a uniform of the same name. */
@@ -128,6 +128,9 @@ type ShaderRippleProps = {
   /* The core lands in the middle of this element. Without it, or while it
      has no size, the core lands near the bottom middle of the view. */
   landing?: RefObject<HTMLElement | null>;
+  /* Start already thrown and landed, with every dot on: a page with no face
+     shows only the core. Read once, at mount. */
+  landed?: boolean;
   /* Keeps every dot and glyph off the page's content: its text, icons and
      controls. See the content mask below. */
   clearOfContent?: boolean;
@@ -352,6 +355,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
   reveal = false,
   thrown = false,
   landing,
+  landed = false,
   clearOfContent = false,
   portraitScale = 1,
   image = bgImage,
@@ -692,7 +696,7 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
     // at any point plays the throw backward from there.
     // `thrown` is the value from the last frame, to see the face turn for
     // home.
-    const throwState = { at: 0, thrown: false };
+    const throwState = { at: landed ? 1 : 0, thrown: landed };
 
     // Where the core lands, in CSS pixels from the canvas's top left. It
     // keeps the last place it saw, so the way back still has a start once
@@ -1193,7 +1197,8 @@ const ShaderRipple: FC<ShaderRippleProps> = ({
 
       gpuSim.compute();
 
-      const active = Math.ceil(10 * frames++);
+      const active = landed ? simSize * simSize : Math.ceil(10 * frames);
+      frames++;
       posVar.material.uniforms.u_nActiveParticles.value = active;
       velVar.material.uniforms.u_nActiveParticles.value = active;
       uniforms.u_nActiveParticles.value = active;
