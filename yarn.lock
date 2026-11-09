@@ -14594,6 +14594,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"simplex-noise@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "simplex-noise@npm:4.0.3"
+  checksum: 10c0/117b7f85abd90f3dc63817ed790705ff0fb50cb0bf396a8fc8fa1443265e4b2529429bb34992e43e7b27d6cacb9059f37fa52a37e59c52f51698ad0d3038d0f3
+  languageName: node
+  linkType: hard
+
 "slash@npm:^3.0.0":
   version: 3.0.0
   resolution: "slash@npm:3.0.0"
@@ -15337,6 +15344,18 @@ __metadata:
   checksum: 10c0/f375aeb2b05c100a456a30bc3ed07ef03a39cbdefe02e0403fb714b8c7e57eeaad1a2f5c4ecfb9ce554ce3db9c2b024eba144843cd9e344566d9fcee73b04767
   languageName: node
   linkType: hard
+
+"thirty@workspace:apps/thirty":
+  version: 0.0.0-use.local
+  resolution: "thirty@workspace:apps/thirty"
+  dependencies:
+    "@rsbuild/core": "npm:^1.6.13"
+    "@types/node": "npm:^22.19.1"
+    puppeteer: "npm:^24.32.1"
+    simplex-noise: "npm:^4.0.3"
+    typescript: "npm:^5.9.3"
+  languageName: unknown
+  linkType: soft
 
 "thread-stream@npm:^3.0.0":
   version: 3.1.0
