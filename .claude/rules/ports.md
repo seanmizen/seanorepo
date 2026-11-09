@@ -46,6 +46,7 @@ use their host ports. See `infra/edge/README.md`.
 | 4090 | autosam.seanmizen.com (page and song API in one process). 4091 reserved. |
 | 4100 | crm.seanmizen.com (apps/crm, pages and API in one process). Not on the LAN edge: sign-in needs HTTPS. |
 | 4101 | demo-crm.seanmizen.com (apps/crm, the `crm-demo` service: the same image as crm). Runs only where `/etc/seanorepo/crm-demo.env` exists. Not on the LAN edge. |
+| 4110 | thirty.seanmizen.com (apps/thirty, a static page). On the LAN edge the page has no WebGPU (plain HTTP), so it uses the CPU. |
 
 ### Add a service
 

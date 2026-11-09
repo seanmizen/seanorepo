@@ -8,7 +8,10 @@
     "build": "rsbuild build",
     "preview": "rsbuild preview",
     "test": "node --test 'src/*.test.ts'",
-    "check:urls": "node scripts/check-urls.mjs"
+    "check:urls": "node scripts/check-urls.mjs",
+    "start:docker": "PUBLISH_ADDR=0.0.0.0 GIT_SHA=$(git rev-parse --short HEAD) docker compose --profile dev up --build",
+    "prod:docker": "docker network create edge >/dev/null 2>&1; GIT_SHA=$(git rev-parse --short HEAD) BUILD_TARGET=prod docker compose --profile prod up --build --detach",
+    "down": "docker compose --profile dev --profile prod down"
   },
   "dependencies": {
     "simplex-noise": "^4.0.3"

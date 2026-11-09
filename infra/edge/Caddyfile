@@ -66,6 +66,12 @@ http://autosam.{$EDGE_HOST}.local {
 	reverse_proxy autosam:4090
 }
 
+# Plain HTTP is not a secure context, so the page has no WebGPU here. It
+# uses the CPU.
+http://thirty.{$EDGE_HOST}.local {
+	reverse_proxy thirty:4110
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

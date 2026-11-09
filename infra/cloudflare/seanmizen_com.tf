@@ -85,6 +85,16 @@ resource "cloudflare_dns_record" "seanmizen_com_demo_crm_cname" {
   zone_id = cloudflare_zone.seanmizen_com.id
 }
 
+# thirty (apps/thirty). A static page.
+resource "cloudflare_dns_record" "seanmizen_com_thirty_cname" {
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
+  name    = "thirty.seanmizen.com"
+  proxied = true
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = cloudflare_zone.seanmizen_com.id
+}
+
 resource "cloudflare_dns_record" "seanmizen_com_voxel_cname" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.seanmizen_3.id}.cfargotunnel.com"
   name    = "voxel.seanmizen.com"
