@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useContext, useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   Navigate,
   Outlet,
@@ -9,7 +9,7 @@ import {
   useLocation,
   useMatch,
 } from 'react-router-dom';
-import { LastUpdated, Portrait, ThemeToggle } from '@/components';
+import { LastUpdated, Portrait, ThemeToggle, ThirtyBg } from '@/components';
 import { ThemeContext, ThemeProvider } from '@/providers';
 import {
   BabyComeBack,
@@ -22,18 +22,31 @@ import {
 } from './routes';
 import '../index.css';
 
+/* The share of visits that show the face. The others show London. */
+const FACE_CHANCE = 0.1;
+
 /* What the home page and /projects share. It stays mounted as you move
-   between them, so the face does not restart and the theme toggle stays
-   put. On /projects, the face is thrown into the slot beside the theme
-   toggle and shrinks into a core on the way, and the hire text fades in. */
+   between them, so the background does not restart and the theme toggle
+   stays put. The background is the London map, or on one visit in ten the
+   face. On /projects, the map fades out, and the core lands in the slot
+   beside the theme toggle with the hire text. The face is thrown into the
+   slot and shrinks into the core on the way. */
 const Layout: FC = () => {
   const { mode, toggleMode } = useContext(ThemeContext);
   const onProjects = useMatch('/projects') !== null;
   const slot = useRef<HTMLSpanElement>(null);
+  const [face] = useState(() => Math.random() < FACE_CHANCE);
   return (
     <>
       <Outlet />
-      <Portrait reveal={onProjects} thrown={onProjects} landing={slot} />
+      {face ? (
+        <Portrait reveal={onProjects} thrown={onProjects} landing={slot} />
+      ) : (
+        <>
+          <ThirtyBg hidden={onProjects} />
+          {onProjects && <Portrait reveal thrown landed landing={slot} />}
+        </>
+      )}
       <div className="bottom-right-controls">
         {!onProjects && (
           <LastUpdated
