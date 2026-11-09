@@ -25,8 +25,9 @@ void main() {
   float w = 0.75 * px;
   vec2 p = mix(pa, pb, corner.x) + w * (corner.y * vec2(-d.y, d.x) + (2.0 * corner.x - 1.0) * d);
   // Before its step, a line is outside the canvas. It shows in accent, then turns to ink.
-  float age = t * steps - appear;
+  // The network builds over the first 90% of the run, so the newest line still fades to ink.
+  float age = t / 0.9 * steps - appear;
   gl_Position = age > -1.0 ? vec4(2.0 * p / res - 1.0, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
   float alpha = 0.75 * clamp(age + 1.0, 0.0, 1.0);
-  col = vec4(mix(accent, ink, clamp(age / (0.1 * steps), 0.0, 1.0)) * alpha, alpha);
+  col = vec4(mix(accent, ink, clamp(age / (0.1 / 0.9 * steps), 0.0, 1.0)) * alpha, alpha);
 }
