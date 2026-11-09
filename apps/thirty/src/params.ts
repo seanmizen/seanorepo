@@ -1,4 +1,4 @@
-import { ALGOS } from './net.ts';
+import { ALGOS, SHAPES } from './net.ts';
 
 export type Tier = {
   spacing: number; // m between stops
@@ -77,10 +77,14 @@ export const DEFAULTS = {
   interchange: 0.25, // share of station cost to stop where a station exists
   snap: 0, // radius, as a share of spacing, to move a stop to a station
   tiers: 'tram,tube,rer,express',
+  shapes: 'line:1', // line shapes and their weights
+  turn: 180, // largest turn in degrees at a via point or a join station
+  join: 0, // share of anneal moves that merge two lines
 };
 
-export type Params = Omit<typeof DEFAULTS, 'tiers'> & {
+export type Params = Omit<typeof DEFAULTS, 'tiers' | 'shapes'> & {
   tiers: string[];
+  shapes: [string, number][];
   chain: [string, number][];
   tierDefs: Record<string, Tier>;
 };
@@ -121,5 +125,12 @@ export function parse(qs: string): Params {
           return [a, c ? num('algo', c) : (out.steps as number)];
         })
     : [];
-  return { ...(out as typeof DEFAULTS), tiers, chain, tierDefs };
+  const shapes = String(out.shapes)
+    .split(',')
+    .map((s): [string, number] => {
+      const [a, w] = s.split(':');
+      if (!SHAPES[a]) throw new Error(`Unknown shape: ${a}.`);
+      return [a, w ? num('shapes', w) : 1];
+    });
+  return { ...(out as typeof DEFAULTS), tiers, shapes, chain, tierDefs };
 }

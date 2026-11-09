@@ -6,7 +6,7 @@ import { fromBytes, genCity } from './gen.ts';
 import { hashNet, type Net, run, type Snap, spent } from './net.ts';
 import { type Params, parse } from './params.ts';
 
-const load = (p: Params) =>
+export const load = (p: Params) =>
   p.city
     ? fromBytes(
         new Uint8Array(
