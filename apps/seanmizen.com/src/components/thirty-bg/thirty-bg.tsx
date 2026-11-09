@@ -118,12 +118,27 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
     };
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
-    // The frame loop stops at the end, so a scroll redraws the mask itself.
+    // The frame loop stops at the end, so a scroll, a change to the page, the
+    // end of a transition or the fonts loading redraws the mask itself, at
+    // most once a frame. Opening a section can change only an attribute.
+    let pending = 0;
     const scroll = () => {
-      drawMask();
-      draw();
+      pending ||= requestAnimationFrame(() => {
+        pending = 0;
+        drawMask();
+        draw();
+      });
     };
     addEventListener('scroll', scroll, { capture: true, passive: true });
+    const changes = new MutationObserver(scroll);
+    changes.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+    });
+    addEventListener('transitionend', scroll, true);
+    document.fonts.ready.then(scroll);
 
     // A hidden tab runs no animation frames, and one frame moves time at
     // most 0.1 s, so the run pauses while the tab is hidden.
@@ -205,6 +220,9 @@ const ThirtyBg: FC<ThirtyBgProps> = ({ city, end }) => {
       cancelAnimationFrame(raf);
       observer.disconnect();
       removeEventListener('scroll', scroll, { capture: true });
+      changes.disconnect();
+      removeEventListener('transitionend', scroll, true);
+      cancelAnimationFrame(pending);
       contentMask.texture.value.dispose();
       tightMask.texture.value.dispose();
       uniforms.city.value?.dispose();
