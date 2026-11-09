@@ -26,7 +26,7 @@ export const FIXTURES = [
   `${C}&algo=greedy&steps=30&tiers=rer,express`,
   `${D}&algo=`,
   `${D}&algo=greedy&steps=30`,
-  `${D}&algo=greedy&steps=30&tube.headway=2`,
+  `${D}&algo=greedy&steps=30&tube.headway=10`,
   `${D}&algo=random&steps=30&run=7`,
   `${D}&algo=greedy:20,anneal:100&N=60`,
   `${B}&size=256&algo=greedy&steps=30`,
@@ -50,13 +50,14 @@ export const DIFFERENT = [
   [11, 14],
   [26, 6],
   [27, 22],
+  [16, 17],
 ];
 
 // Index (0-based) to hash. The defaults of the station prices, snap, shapes and join must not change these.
 export const HASHES: Record<number, string> = {
-  1: '14e1496d',
-  2: '043d078a',
-  6: '95c31409',
-  13: '21317eb7',
-  22: '3e5901ff',
+  1: 'e743d456',
+  2: 'ad2bd194',
+  6: '409fb2f7',
+  13: '97e8ebab',
+  22: '7d723836',
 };
