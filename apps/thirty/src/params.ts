@@ -82,6 +82,7 @@ export const DEFAULTS = {
   candidates: 12,
   interchange: 0.25, // share of station cost to stop where a station exists
   snap: 0, // radius, as a share of spacing, to move a stop to a station
+  stopMin: 0.25, // least catchment demand of a spacing stop, as a multiple of the land mean
   tiers: 'tram,tube,rer,express',
   shapes: 'line:1', // line shapes and their weights
   turn: 105, // largest turn in degrees at a via point or a join station
