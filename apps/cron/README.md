@@ -9,6 +9,12 @@ serves `GET /api/cron` on port 4001. The tunnel sends `seanmizen.com/api/*`
 to this port. The dashboard is a page of seanmizen.com. It only reads, and it
 asks for new data every 30 seconds.
 
+At startup, the service sends one email: the start time, and each job with
+its schedule and its next run. A deploy recreates the container only when
+the cron image changed. So the email comes after a release that changed
+`apps/cron`, a reboot, or a crash. The first one after a release also
+proves that the email settings work.
+
 The schedule is in London time (`Europe/London`). Croner skips a tick while
 the last run of the same job has not finished.
 

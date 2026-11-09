@@ -91,6 +91,33 @@ const human = (schedule: string) => {
   }
 };
 
+const london = (date: Date) =>
+  date.toLocaleString('en-GB', { timeZone: TIMEZONE });
+
+/**
+ * The email that the service sends at startup. It says that the service
+ * started, and it proves that the email settings work.
+ */
+export const startupEmail = (jobs: Job[], crons: Map<string, Cron>) => ({
+  subject: 'cron started',
+  text: [
+    `The cron service started at ${london(new Date())} (London).`,
+    '',
+    `${jobs.length} jobs:`,
+    ...jobs.map((job) => {
+      const next = crons.get(job.id)?.nextRun();
+      return [
+        '',
+        `${job.title} (${job.id})`,
+        `  Schedule: ${job.schedule} (${human(job.schedule)})`,
+        `  Next run: ${next ? london(next) : 'none'}`,
+      ].join('\n');
+    }),
+    '',
+    'https://seanmizen.com/cron',
+  ].join('\n'),
+});
+
 /** The body of GET /api/cron. */
 export const dashboard = (db: Db, jobs: Job[], crons: Map<string, Cron>) => ({
   timezone: TIMEZONE,
