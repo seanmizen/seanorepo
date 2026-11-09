@@ -312,6 +312,18 @@ function draw() {
     const out = k === p || k === e ? [p, e] : [p, k, e];
     return a < b ? out : out.reverse();
   };
+  // One-cell steps along a straight or 45° leg. Bundling works on these steps,
+  // so lines that use the same cells run side by side whatever their stations are.
+  const cells = (a: number, b: number) => {
+    const dx = Math.sign((b % w) - (a % w));
+    const dy = Math.sign(Math.floor(b / w) - Math.floor(a / w));
+    const out: number[] = [];
+    for (let c = a; c !== b; ) {
+      c += dx + dy * w;
+      out.push(c);
+    }
+    return out;
+  };
   const order = Object.keys(STYLE);
   const ids = s.lines
     .map((_, i) => i)
@@ -324,16 +336,26 @@ function draw() {
     const l = s.lines[i];
     return {
       ...l,
-      path: l.stops.flatMap((c, k) =>
-        k ? legs(l.stops[k - 1], c).slice(1) : [c],
-      ),
+      path: l.stops
+        .flatMap((c, k) => (k ? legs(l.stops[k - 1], c).slice(1) : [c]))
+        .flatMap((c, k, p) => (k ? cells(p[k - 1], c) : [c])),
     };
   });
   const width = (l: Line) =>
     lineMode.value === 'by line' ? u : STYLE[l.tier][1] * lw;
   const { pts, stations } = layout(lines, at, width, 0.6 * u);
   // Rounded corners: each bend is an arc no wider than half of either leg.
-  const stroke = (p: Pt[]) => {
+  const stroke = (all: Pt[]) => {
+    // Remove points where the line goes straight on, so corners get their full radius.
+    const p = all.filter((q, k) => {
+      if (k === 0 || k === all.length - 1) return true;
+      const [a, b] = [all[k - 1], all[k + 1]];
+      return (
+        Math.abs(
+          (q[0] - a[0]) * (b[1] - q[1]) - (q[1] - a[1]) * (b[0] - q[0]),
+        ) > 1e-6
+      );
+    });
     ctx.beginPath();
     ctx.moveTo(...p[0]);
     for (let k = 1; k < p.length - 1; k++) {

@@ -63,23 +63,26 @@ export function layout(
       sign.set(s, (px * nx + py * ny) * before >= 0 ? 1 : -1);
     }
 
-  // Each path point moves by the mean of the offsets of the segments on each side of it.
+  // Each path point moves to the corner of the offset segments on each side of it.
+  // If only one side is in a bundle, the point keeps that side's offset, so a line
+  // stays apart from the bundle until it turns away. Both sides: the mitre corner.
   const pts = lines.map((l, i) =>
     l.path.map((c, k): Pt => {
       const [x, y] = at(c);
-      let dx = 0;
-      let dy = 0;
-      let m = 0;
-      for (const j of [k - 1, k + 1]) {
-        if (j < 0 || j >= l.path.length) continue;
-        const s = key(c, l.path[j]);
-        const [nx, ny] = raw(c, l.path[j]);
-        const o = (offset.get(s)?.get(i) ?? 0) * (sign.get(s) ?? 1);
-        dx += nx * o;
-        dy += ny * o;
-        m++;
-      }
-      return m ? [x + dx / m, y + dy / m] : [x, y];
+      const side = [k - 1, k + 1]
+        .filter((j) => j >= 0 && j < l.path.length)
+        .map((j) => {
+          const s = key(c, l.path[j]);
+          const [nx, ny] = raw(c, l.path[j]);
+          const o = (offset.get(s)?.get(i) ?? 0) * (sign.get(s) ?? 1);
+          return [nx * o, ny * o, nx, ny, o];
+        })
+        .filter((v) => Math.abs(v[4]) > 1e-9);
+      if (side.length === 0) return [x, y];
+      if (side.length === 1) return [x + side[0][0], y + side[0][1]];
+      const [[ax, ay, anx, any], [bx, by, bnx, bny]] = side;
+      const f = 1 / Math.max(0.5, 1 + anx * bnx + any * bny);
+      return [x + (ax + bx) * f, y + (ay + by) * f];
     }),
   );
 
