@@ -15,6 +15,7 @@
   "scripts": {
     "sean": "yarn workspace seanmizen.com start",
     "caroline": "yarn workspace carolinemizen.art start",
+    "cron": "yarn workspace cron start",
     "cards": "yarn workspace seanscards start",
     "inside": "yarn workspace inside start",
     "gosniff": "yarn workspace gosniff start",

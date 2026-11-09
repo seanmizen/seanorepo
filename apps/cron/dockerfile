@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.6
+#
+# cron: one Bun process runs the jobs in src/registry.ts, and serves
+# /api/cron on 4001 for the dashboard at seanmizen.com/cron. The runs are in
+# SQLite in the volume at /data.
+
+FROM node:24-slim AS deps
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
+WORKDIR /app
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/cron/package.json ./apps/cron/
+RUN yarn workspaces focus cron
+
+# docker-compose bind-mounts the monorepo at /app. node_modules is a named
+# volume that this image fills. Bun restarts the service when a file of src/
+# changes.
+FROM deps AS dev
+WORKDIR /app/apps/cron
+ENV PORT=4001 DB_PATH=/data/cron.db
+EXPOSE 4001
+CMD ["bun", "--watch", "src/index.ts"]
+
+FROM deps AS prod-deps
+RUN rm -rf node_modules && yarn workspaces focus cron --production
+
+FROM oven/bun:1-slim AS prod
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY apps/cron/package.json apps/cron/tsconfig.json ./apps/cron/
+COPY apps/cron/src ./apps/cron/src
+WORKDIR /app/apps/cron
+ENV NODE_ENV=production PORT=4001 DB_PATH=/data/cron.db
+EXPOSE 4001
+CMD ["bun", "src/index.ts"]
