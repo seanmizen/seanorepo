@@ -245,8 +245,8 @@ function drawKey(max: number, s: Snap) {
 <p><small>${label[2]} Shading shows hills.</small></p>
 <p>${swatch(SEA)} sea, lake: no walking ${swatch(RIVER)} river: walking ×5</p>
 ${tiers}
-<p><svg width="40" height="14" style="background:#222;vertical-align:middle"><circle cx="10" cy="7" r="3" fill="#fff" stroke="#000"/><line x1="22" y1="7" x2="34" y2="7" stroke="#000" stroke-width="8" stroke-linecap="round"/><line x1="22" y1="7" x2="34" y2="7" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>
-station on the lines that stop there. A long marker is an interchange. Lines that share a station touch. Others keep a gap.</p>
+<p><svg width="56" height="16" style="background:#222;vertical-align:middle"><line x1="2" y1="8" x2="16" y2="8" stroke="#ff9f0a" stroke-width="3"/><line x1="9" y1="8" x2="9" y2="3" stroke="#ff9f0a" stroke-width="2"/><circle cx="30" cy="8" r="5" fill="#fff" stroke="#000"/><circle cx="40" cy="8" r="5" fill="#fff" stroke="#000"/><circle cx="35" cy="8" r="4" fill="#fff"/></svg>
+a tick: a stop on one line. A round node: an interchange, one node for each three lines. Lines run straight between stations, then 45°. The drawing is a diagram: the real track follows the land.</p>
 <p><small>Scroll to zoom. Drag to pan. Double-click to reset.</small></p>`;
 }
 
@@ -296,10 +296,22 @@ function draw() {
   // Lines get thinner relative to the map as you zoom in, so detail stays visible.
   const px = canvas.width / w;
   const lw = devicePixelRatio / Math.sqrt(view.k);
+  const u = STYLE.tube[1] * lw; // One line width on the tube map.
   const at = (c: number): Pt => [
     ((c % w) + 0.5) * px,
     (Math.floor(c / w) + 0.5) * px,
   ];
+  // Schematic legs between two stations: straight, then 45°. Always built from the
+  // lower cell index, so all lines between the same two stations share both legs.
+  const legs = (a: number, b: number) => {
+    const [p, e] = a < b ? [a, b] : [b, a];
+    const dx = (e % w) - (p % w);
+    const dy = Math.floor(e / w) - Math.floor(p / w);
+    const d = Math.min(Math.abs(dx), Math.abs(dy));
+    const k = e - Math.sign(dx) * d - Math.sign(dy) * d * w;
+    const out = k === p || k === e ? [p, e] : [p, k, e];
+    return a < b ? out : out.reverse();
+  };
   const order = Object.keys(STYLE);
   const ids = s.lines
     .map((_, i) => i)
@@ -308,37 +320,109 @@ function draw() {
         order.indexOf(s.lines[a].tier) - order.indexOf(s.lines[b].tier) ||
         a - b,
     );
-  const lines = ids.map((i) => s.lines[i]);
-  const width = (l: Line) => STYLE[l.tier][1] * lw;
-  const { pts, stations } = layout(lines, at, width, 1.5 * lw);
+  const lines = ids.map((i) => {
+    const l = s.lines[i];
+    return {
+      ...l,
+      path: l.stops.flatMap((c, k) =>
+        k ? legs(l.stops[k - 1], c).slice(1) : [c],
+      ),
+    };
+  });
+  const width = (l: Line) =>
+    lineMode.value === 'by line' ? u : STYLE[l.tier][1] * lw;
+  const { pts, stations } = layout(lines, at, width, 0.6 * u);
+  // Rounded corners: each bend is an arc no wider than half of either leg.
+  const stroke = (p: Pt[]) => {
+    ctx.beginPath();
+    ctx.moveTo(...p[0]);
+    for (let k = 1; k < p.length - 1; k++) {
+      const half = (q: Pt) => Math.hypot(q[0] - p[k][0], q[1] - p[k][1]) / 2;
+      ctx.arcTo(
+        ...p[k],
+        ...p[k + 1],
+        Math.min(3 * u, half(p[k - 1]), half(p[k + 1])),
+      );
+    }
+    ctx.lineTo(...p[p.length - 1]);
+    ctx.stroke();
+  };
   ctx.lineCap = ctx.lineJoin = 'round';
   lines.forEach((l, j) => {
     ctx.strokeStyle = lineColor(l, ids[j]);
     ctx.lineWidth = width(l);
-    ctx.beginPath();
-    for (const p of pts[j]) ctx.lineTo(...p);
-    ctx.stroke();
+    stroke(pts[j]);
   });
-  // A station is a white marker across the lines that stop there.
+  // Tube-map stations. One line: a tick on its side. Two or more: round nodes 3u wide,
+  // one node for each three lines, touching, so they draw as one shape.
   for (const list of stations.values()) {
-    let [a, b] = [list[0].p, list[0].p];
-    let far = 0;
-    for (const u of list)
-      for (const v of list) {
-        const d = Math.hypot(u.p[0] - v.p[0], u.p[1] - v.p[1]);
-        if (d > far) [a, b, far] = [u.p, v.p, d];
-      }
-    const r = Math.max(...list.map((u) => width(lines[u.i]))) / 2 + 1.2 * lw;
-    for (const [color, extra] of [
-      ['#000', lw],
-      ['#fff', 0],
-    ] as const) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2 * r + 2 * extra - 2 * lw;
+    if (list.length === 1) {
+      const { i, p } = list[0];
+      const path = pts[i];
+      const k = path.indexOf(p);
+      const [a, b] = [
+        path[Math.max(0, k - 1)],
+        path[Math.min(path.length - 1, k + 1)],
+      ];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const t = width(lines[i]) / 2 + 0.7 * u;
+      ctx.strokeStyle = lineColor(lines[i], ids[i]);
+      ctx.lineWidth = 0.8 * u;
+      ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.moveTo(...a);
-      ctx.lineTo(b[0] + 1e-3, b[1]);
+      ctx.moveTo(...p);
+      ctx.lineTo(
+        p[0] - ((b[1] - a[1]) / len) * t,
+        p[1] + ((b[0] - a[0]) / len) * t,
+      );
       ctx.stroke();
+      ctx.lineCap = 'round';
+      continue;
+    }
+    // Sort the lines along the direction they spread in, then group them in threes.
+    let axis: Pt = [1, 0];
+    let far = 0;
+    for (const v of list)
+      for (const z of list) {
+        const d = Math.hypot(v.p[0] - z.p[0], v.p[1] - z.p[1]);
+        if (d > far)
+          [axis, far] = [[(z.p[0] - v.p[0]) / d, (z.p[1] - v.p[1]) / d], d];
+      }
+    const sorted = [...list].sort(
+      (v, z) =>
+        v.p[0] * axis[0] +
+        v.p[1] * axis[1] -
+        (z.p[0] * axis[0] + z.p[1] * axis[1]),
+    );
+    const nodes: Pt[] = [];
+    for (let g = 0; g < sorted.length; g += 3) {
+      const group = sorted.slice(g, g + 3);
+      nodes.push([
+        group.reduce((m, v) => m + v.p[0], 0) / group.length,
+        group.reduce((m, v) => m + v.p[1], 0) / group.length,
+      ]);
+    }
+    // Space the nodes exactly one diameter apart, centred on their mean.
+    const mid: Pt = [
+      nodes.reduce((m, n) => m + n[0], 0) / nodes.length,
+      nodes.reduce((m, n) => m + n[1], 0) / nodes.length,
+    ];
+    const placed = nodes.map(
+      (_, g): Pt => [
+        mid[0] + axis[0] * 3 * u * (g - (nodes.length - 1) / 2),
+        mid[1] + axis[1] * 3 * u * (g - (nodes.length - 1) / 2),
+      ],
+    );
+    for (const [color, r] of [
+      ['#000', 1.5 * u + lw],
+      ['#fff', 1.5 * u - lw],
+    ] as const) {
+      ctx.fillStyle = color;
+      for (const n of placed) {
+        ctx.beginPath();
+        ctx.arc(...n, r, 0, 7);
+        ctx.fill();
+      }
     }
   }
   stats.textContent = `Step ${s.step}/${s.total} ${s.algo} · jobs within ${s.N} min: ${(s.within * 100).toFixed(1)}% · P50 ${fmt(s.p50, s.N)} · P95 ${fmt(s.p95, s.N)} · J ${s.J.toFixed(4)} · cost ${s.cost.toFixed(0)}/${s.budget} · ${s.lines.length} lines · hash ${s.hash} · ${((w * cellM) / 1000).toFixed(0)} km across`;
