@@ -1,14 +1,18 @@
 import { fromBytes, genCity } from './gen.ts';
 import { gpu } from './gpu.ts';
 import { type Eval, type Prep, samples, spent } from './graph.ts';
-import { hashNet, run, type Snap } from './net.ts';
+import { hashNet, type Net, run, type Snap } from './net.ts';
 import { parse } from './params.ts';
 import { pool } from './pool.ts';
 
-// Runs the chain. Posts the city once, then a snapshot per step (at most one each 100 ms).
+// Runs the chain. Posts the city once, then a snapshot for each step: its lines, J and cost.
+// The map score (256 samples) of a step comes in a separate message: at most one each 100 ms, the last step,
+// and any step the page asks for with its step number.
 // Each batch of greedy candidates gets its J from the pool, or with gpu=1 and WebGPU from the GPU.
 // On the GPU, the pool prepares the networks. Anneal and random score on this thread.
-self.onmessage = async ({ data }: MessageEvent<string>) => {
+let mapScore = (_step: number) => {};
+self.onmessage = async ({ data }: MessageEvent<string | number>) => {
+  if (typeof data === 'number') return mapScore(data);
   try {
     const p = parse(data);
     const res = p.city ? await fetch(`/cities/${p.city}.bin`) : null;
@@ -18,27 +22,34 @@ self.onmessage = async ({ data }: MessageEvent<string>) => {
     const score = p.gpu ? await gpu(city, p, S) : null;
     postMessage({ type: 'city', city, gpu: !!score });
     const job = pool(city, data);
-    // The pool evaluates each snapshot with 256 samples. The chain posts the snapshots in step order.
+    // The networks of all steps, so that the pool can score any step later.
+    const nets: Net[] = [];
     let posted = Promise.resolve();
+    mapScore = (step) => {
+      const e = job<Eval>({ net: nets[step], S: 256 });
+      posted = posted.then(async () =>
+        postMessage({ type: 'score', ...(await e), step }),
+      );
+    };
     let last = 0;
     let hash = '';
     const post = (s: Snap) => {
-      const end = s.step === s.total;
-      if (!end && s.step > 0 && performance.now() - last < 100) return;
-      last = performance.now();
       const { net, ...rest } = s;
-      const e = job<Eval>({ net, S: 256 });
-      const snap = {
+      nets.push(net);
+      hash = hashNet(net);
+      postMessage({
         type: 'snap',
         ...rest,
         lines: net.lines,
         cost: spent(net),
-        hash: hashNet(net),
+        hash,
         N: p.N,
         budget: p.budget,
-      };
-      hash = snap.hash;
-      posted = posted.then(async () => postMessage({ ...snap, ...(await e) }));
+      });
+      if (s.step < s.total && s.step > 0 && performance.now() - last < 100)
+        return;
+      last = performance.now();
+      mapScore(s.step);
     };
     const steps = run(city, p);
     for (let r = steps.next(); !r.done; ) {
