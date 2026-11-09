@@ -7,6 +7,7 @@ export type Tier = {
   dwell: number; // s at each stop
   accel: number; // m/s²
   cost: number; // per km of build weight
+  station: number; // per new station
   minKm: number; // shortest line
   maxKm: number; // longest line
 };
@@ -19,6 +20,7 @@ export const TIER_DEFAULTS: Record<string, Tier> = {
     dwell: 20,
     accel: 1,
     cost: 1,
+    station: 0,
     minKm: 2,
     maxKm: 8,
   },
@@ -29,6 +31,7 @@ export const TIER_DEFAULTS: Record<string, Tier> = {
     dwell: 30,
     accel: 1,
     cost: 3,
+    station: 0,
     minKm: 4,
     maxKm: 16,
   },
@@ -39,6 +42,7 @@ export const TIER_DEFAULTS: Record<string, Tier> = {
     dwell: 40,
     accel: 0.8,
     cost: 3,
+    station: 0,
     minKm: 8,
     maxKm: 35,
   },
@@ -49,6 +53,7 @@ export const TIER_DEFAULTS: Record<string, Tier> = {
     dwell: 60,
     accel: 0.6,
     cost: 4,
+    station: 0,
     minKm: 15,
     maxKm: 60,
   },
@@ -69,6 +74,8 @@ export const DEFAULTS = {
   N: 30,
   budget: 1500,
   candidates: 12,
+  interchange: 0.25, // share of station cost to stop where a station exists
+  snap: 0, // radius, as a share of spacing, to move a stop to a station
   tiers: 'tram,tube,rer,express',
 };
 

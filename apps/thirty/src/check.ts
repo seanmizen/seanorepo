@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { DIFFERENT, FIXTURES } from './fixtures.ts';
+import { DIFFERENT, FIXTURES, HASHES } from './fixtures.ts';
 import { fromBytes, genCity } from './gen.ts';
-import { hashNet, run, type Snap, spent } from './net.ts';
+import { hashNet, type Net, run, type Snap, spent } from './net.ts';
 import { type Params, parse } from './params.ts';
 
 const load = (p: Params) =>
@@ -23,6 +23,21 @@ function finish(qs: string) {
   const p = parse(qs);
   const snaps = [...run(load(p), p)];
   return { p, snaps, hash: hashNet(snaps[snaps.length - 1].net) };
+}
+
+// The result of fixture i. Computed once per test file.
+export function result(i: number) {
+  const r = cache.get(FIXTURES[i]) ?? finish(FIXTURES[i]);
+  cache.set(FIXTURES[i], r);
+  return r;
+}
+
+// The number of cells where 2 or more lines stop.
+export function shared(net: Net) {
+  const n = new Map<number, number>();
+  for (const l of net.lines)
+    for (const c of new Set(l.stops)) n.set(c, (n.get(c) ?? 0) + 1);
+  return [...n.values()].filter((x) => x >= 2).length;
 }
 
 // Tests for fixtures [from, to). One file per city, so node runs the cities in parallel.
@@ -57,13 +72,12 @@ export function checkFixtures(from: number, to: number) {
       if (p.chain.some(([a]) => a === 'greedy'))
         assert.ok(last.J > snaps[0].J, 'no gain over walking');
       assert.equal(finish(qs).hash, r.hash, 'not deterministic');
+      if (HASHES[i]) assert.equal(r.hash, HASHES[i], 'hash changed');
     });
   }
   for (const [a, b] of DIFFERENT)
     if (a >= from && a < to && b < to)
       test(`${a + 1} and ${b + 1} differ`, () => {
-        const h = (i: number) =>
-          (cache.get(FIXTURES[i]) ?? finish(FIXTURES[i])).hash;
-        assert.notEqual(h(a), h(b));
+        assert.notEqual(result(a).hash, result(b).hash);
       });
 }

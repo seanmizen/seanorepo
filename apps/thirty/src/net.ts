@@ -1,6 +1,6 @@
 import { type City, cellDist, mulberry32, type Rng } from './gen.ts';
 import { csr, dijkstra, evaluate, type Graph, gridEdges } from './graph.ts';
-import type { Params, Tier } from './params.ts';
+import type { Params } from './params.ts';
 
 export type Line = {
   tier: string;
@@ -47,7 +47,18 @@ function route(city: City, a: number, b: number) {
 }
 
 // Stops at the tier spacing, on land only. The last stop is the end of the path.
-function makeLine(city: City, tier: string, t: Tier, path: number[]): Line {
+// If "at" is given, the stops are at those path indices only.
+// A new station costs t.station. A stop at a station in "have" costs p.interchange of that.
+// The cost is fixed when the line is made. It does not change when other lines change.
+function makeLine(
+  city: City,
+  p: Params,
+  tier: string,
+  path: number[],
+  have: Set<number>,
+  at?: Set<number>,
+): Line {
+  const t = p.tierDefs[tier];
   const stops = [path[0]];
   const segs: number[] = [];
   let since = 0;
@@ -57,7 +68,13 @@ function makeLine(city: City, tier: string, t: Tier, path: number[]): Line {
     since += d;
     cost += buildW(city, path[k - 1], path[k], d);
     const end = k === path.length - 1;
-    if (end && since < t.spacing / 2 && stops.length > 1) {
+    if (at) {
+      if (at.has(k)) {
+        stops.push(path[k]);
+        segs.push(since);
+        since = 0;
+      }
+    } else if (end && since < t.spacing / 2 && stops.length > 1) {
       stops[stops.length - 1] = path[k];
       segs[segs.length - 1] += since;
     } else if (end || (since >= t.spacing && !city.water[path[k]])) {
@@ -66,7 +83,38 @@ function makeLine(city: City, tier: string, t: Tier, path: number[]): Line {
       since = 0;
     }
   }
-  return { tier, path, stops, segs, cost: (cost / 1000) * t.cost };
+  let stations = 0;
+  for (const c of stops)
+    stations += have.has(c) ? t.station * p.interchange : t.station;
+  return { tier, path, stops, segs, cost: (cost / 1000) * t.cost + stations };
+}
+
+// The line with each stop moved to the nearest station within snap x spacing.
+// The route goes through each stop. Null if no stop moves or a part has no route.
+function snapped(city: City, p: Params, l: Line, have: Set<number>) {
+  const r = p.snap * p.tierDefs[l.tier].spacing;
+  const ways: number[] = [];
+  let moved = false;
+  for (const s of l.stops) {
+    let best = s;
+    let bd = r;
+    for (const c of have) {
+      const d = cellDist(s, c, city.w) * city.cellM;
+      if (d <= bd && !city.water[c]) [best, bd] = [c, d];
+    }
+    moved ||= best !== s;
+    if (best !== ways[ways.length - 1]) ways.push(best);
+  }
+  if (!moved || ways.length < 2) return null;
+  const path = [ways[0]];
+  const at = new Set<number>();
+  for (let k = 1; k < ways.length; k++) {
+    const part = route(city, ways[k - 1], ways[k]);
+    if (!part) return null;
+    path.push(...part.slice(1));
+    at.add(path.length - 1);
+  }
+  return makeLine(city, p, l.tier, path, have, at);
 }
 
 const cdfCache = new WeakMap<Float32Array, Float64Array>();
@@ -87,8 +135,15 @@ function sample(a: Float32Array, r: number) {
   return lo;
 }
 
-// A random line from a home-weighted cell to a job-weighted cell, within the budget left.
-function candidate({ city, p, rng }: Ctx, left: number): Line | null {
+const add = (net: Net, l: Line): Net => ({ lines: [...net.lines, l] });
+const last = (net: Net) => net.lines[net.lines.length - 1];
+
+// The network with one more random line, from a home-weighted cell to a job-weighted cell.
+// The line fits in the budget left. The new line is the last line.
+// If snap > 0, a snapped variant is made too. The one with more gain per cost is kept.
+function candidate(c: Ctx, net: Net, left: number): Net | null {
+  const { city, p, rng } = c;
+  const have = new Set(net.lines.flatMap((l) => l.stops));
   for (let tries = 0; tries < 20; tries++) {
     const tier = p.tiers[Math.floor(rng() * p.tiers.length)];
     const t = p.tierDefs[tier];
@@ -98,14 +153,21 @@ function candidate({ city, p, rng }: Ctx, left: number): Line | null {
     if (km < t.minKm || km > t.maxKm) continue;
     const path = route(city, a, b);
     if (!path) continue;
-    const l = makeLine(city, tier, t, path);
-    if (l.cost <= left && l.stops.length > 1) return l;
+    const plain = makeLine(city, p, tier, path, have);
+    const ns = [plain, p.snap > 0 ? snapped(city, p, plain, have) : null]
+      .filter((l): l is Line => !!l && l.cost <= left && l.stops.length > 1)
+      .map((l) => add(net, l));
+    if (ns.length < 2) {
+      if (ns.length) return ns[0];
+      continue;
+    }
+    const gain = (n: Net) => (c.J(n) - c.J(net)) / last(n).cost;
+    return gain(ns[1]) > gain(ns[0]) ? ns[1] : ns[0];
   }
   return null;
 }
 
 export const spent = (net: Net) => net.lines.reduce((s, l) => s + l.cost, 0);
-const add = (net: Net, l: Line): Net => ({ lines: [...net.lines, l] });
 const without = (net: Net, k: number): Net => ({
   lines: net.lines.filter((_, i) => i !== k),
 });
@@ -113,8 +175,7 @@ const without = (net: Net, k: number): Net => ({
 export const ALGOS: Record<string, Algo> = {
   // Baseline: add a random line.
   random: (net, c) => {
-    const l = candidate(c, c.p.budget - spent(net));
-    return l ? add(net, l) : net;
+    return candidate(c, net, c.p.budget - spent(net)) ?? net;
   },
   // Add the candidate with the best gain per cost. Adding a line never makes a trip slower.
   greedy: (net, c) => {
@@ -122,10 +183,9 @@ export const ALGOS: Record<string, Algo> = {
     let best = net;
     let gain = 0;
     for (let i = 0; i < c.p.candidates; i++) {
-      const l = candidate(c, c.p.budget - spent(net));
-      if (!l) continue;
-      const n2 = add(net, l);
-      const g = (c.J(n2) - j0) / l.cost;
+      const n2 = candidate(c, net, c.p.budget - spent(net));
+      if (!n2) continue;
+      const g = (c.J(n2) - j0) / last(n2).cost;
       if (g > gain) [best, gain] = [n2, g];
     }
     return best;
@@ -135,14 +195,12 @@ export const ALGOS: Record<string, Algo> = {
     const r = c.rng();
     const k = Math.floor(c.rng() * net.lines.length);
     let n2: Net = net;
-    if (r < 0.4 || !net.lines.length) {
-      const l = candidate(c, c.p.budget - spent(net));
-      if (l) n2 = add(net, l);
-    } else if (r < 0.7) n2 = without(net, k);
+    if (r < 0.4 || !net.lines.length)
+      n2 = candidate(c, net, c.p.budget - spent(net)) ?? net;
+    else if (r < 0.7) n2 = without(net, k);
     else {
       const rest = without(net, k);
-      const l = candidate(c, c.p.budget - spent(rest));
-      if (l) n2 = add(rest, l);
+      n2 = candidate(c, rest, c.p.budget - spent(rest)) ?? net;
     }
     const j0 = c.J(net);
     const d = (c.J(n2) - j0) / Math.max(j0, 1e-9);
