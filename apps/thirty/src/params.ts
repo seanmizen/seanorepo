@@ -68,7 +68,7 @@ export const DEFAULTS = {
   rivers: 2,
   hills: 0.3,
   warp: 0.3,
-  algo: '',
+  algo: 'greedy',
   steps: 30,
   run: 1,
   N: 30,
