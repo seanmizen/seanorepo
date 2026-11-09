@@ -63,9 +63,9 @@ export function layout(
       sign.set(s, (px * nx + py * ny) * before >= 0 ? 1 : -1);
     }
 
-  // Each path point moves to the corner of the offset segments on each side of it.
-  // If only one side is in a bundle, the point keeps that side's offset, so a line
-  // stays apart from the bundle until it turns away. Both sides: the mitre corner.
+  // Each path point moves to the corner where the two offset segments on each side meet.
+  // An offset of 0 counts, so a line keeps its own direction up to the corner where it
+  // joins a bundle. On a straight run with a change of offset, the larger offset wins.
   const pts = lines.map((l, i) =>
     l.path.map((c, k): Pt => {
       const [x, y] = at(c);
@@ -74,15 +74,23 @@ export function layout(
         .map((j) => {
           const s = key(c, l.path[j]);
           const [nx, ny] = raw(c, l.path[j]);
-          const o = (offset.get(s)?.get(i) ?? 0) * (sign.get(s) ?? 1);
-          return [nx * o, ny * o, nx, ny, o];
-        })
-        .filter((v) => Math.abs(v[4]) > 1e-9);
-      if (side.length === 0) return [x, y];
-      if (side.length === 1) return [x + side[0][0], y + side[0][1]];
-      const [[ax, ay, anx, any], [bx, by, bnx, bny]] = side;
-      const f = 1 / Math.max(0.5, 1 + anx * bnx + any * bny);
-      return [x + (ax + bx) * f, y + (ay + by) * f];
+          return [nx, ny, (offset.get(s)?.get(i) ?? 0) * (sign.get(s) ?? 1)];
+        });
+      if (side.length === 1)
+        return [x + side[0][0] * side[0][2], y + side[0][1] * side[0][2]];
+      const [[ax, ay, ao], [bx, by, bo]] = side;
+      const det = ax * by - ay * bx;
+      if (Math.abs(det) > 0.2) {
+        // Solve d · nA = oA and d · nB = oB. Limit the length at sharp corners.
+        let dx = (ao * by - bo * ay) / det;
+        let dy = (ax * bo - bx * ao) / det;
+        const m = Math.hypot(dx, dy);
+        const lim = 3 * Math.max(Math.abs(ao), Math.abs(bo));
+        if (m > lim) [dx, dy] = [(dx * lim) / m, (dy * lim) / m];
+        return [x + dx, y + dy];
+      }
+      const [nx, ny, o] = Math.abs(ao) >= Math.abs(bo) ? side[0] : side[1];
+      return [x + nx * o, y + ny * o];
     }),
   );
 
