@@ -132,7 +132,7 @@ input[type=checkbox]{width:auto}
 <p>Each cell shows the share of jobs it reaches within N minutes. Brighter is better.</p>
 <p id="s">Loading…</p>
 <p><input id="t" type="range" min="0" max="0" value="0" aria-label="Step"></p>
-<p><label>Map <select id="l">${options(['score', 'pop', 'jobs', 'height'])}</select></label>
+<p><label>Map <select id="l">${options(['score', 'unmet', 'pop', 'jobs', 'height'])}</select></label>
 <label>Lines <select id="m">${options(['by tier', 'by line'])}</select></label>
 <label>Stops <select id="st">${options(['dots', 'ticks'])}</select></label></p>
 <div id="k"></div>
@@ -314,6 +314,13 @@ function drawKey(max: number, s: Snap) {
           'Fares for each home. Square-root scale.',
         ]
       : [`0% of jobs within ${N} min`, '100%', `Fades to 0 at ${2 * N} min.`],
+    unmet: [
+      'all met',
+      'most unmet',
+      revenue
+        ? 'Homes and jobs, times the share of fares they miss against the best-served cell. Square-root scale.'
+        : `Homes and jobs, times the share of trips not made within ${N} min. Square-root scale.`,
+    ],
     pop: ['few homes', 'many', 'Square-root scale.'],
     jobs: ['few jobs', 'many', 'Square-root scale.'],
     height: ['0 m', `${max.toFixed(0)} m`, 'Square-root scale.'],
@@ -348,12 +355,25 @@ a dot or a tick (the Stops picker): a stop on one line. A round node: an interch
 let mapFor = '';
 let map = new OffscreenCanvas(1, 1);
 let max = 1e-12;
+// Unmet demand: the homes and jobs of a cell, times the share of its score it does not get.
+// With reach the score is a share (0 to 1). With revenue it is a share of the best cell's fares.
+function unmet(s: Snap) {
+  const top = revenue ? s.score.reduce((m, x) => Math.max(m, x), 1e-12) : 1;
+  return city.pop.map(
+    (p, i) => (p + city.jobs[i]) * Math.max(0, 1 - s.score[i] / top),
+  );
+}
+
 function drawMap(s: Snap) {
   const { w, elev, water, cellM } = city;
   const vals =
-    { score: s.score, pop: city.pop, jobs: city.jobs, height: elev }[
-      layer.value
-    ] ?? s.score;
+    {
+      score: s.score,
+      unmet: layer.value === 'unmet' ? unmet(s) : s.score,
+      pop: city.pop,
+      jobs: city.jobs,
+      height: elev,
+    }[layer.value] ?? s.score;
   max = vals.reduce((m, x) => Math.max(m, x), 1e-12);
   const img = new ImageData(w, w);
   for (let i = 0; i < w * w; i++) {
