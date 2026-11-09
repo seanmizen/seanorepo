@@ -78,12 +78,16 @@ h1 {
   EntityList/Entity, which owns the chevron and what it means.
 */
 
-a:hover {
-  text-shadow: 0.2px 0.2px 0.2px var(--link-hover-glow);
-  /* A cue that survives any palette: links already carry an underline at rest,
-     so thickening it emphasises without depending on colour at all (WCAG 1.4.1
-     prefers a non-colour cue). */
-  text-decoration-thickness: 2px;
+/* Only a real pointer hovers. A touch screen keeps :hover on whatever is
+   under the last tap, which after a page change is a new element. */
+@media (hover: hover) {
+  a:hover {
+    text-shadow: 0.2px 0.2px 0.2px var(--link-hover-glow);
+    /* A cue that survives any palette: links already carry an underline at
+       rest, so thickening it emphasises without depending on colour at all
+       (WCAG 1.4.1 prefers a non-colour cue). */
+    text-decoration-thickness: 2px;
+  }
 }
 
 .container {
