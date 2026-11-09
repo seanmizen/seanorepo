@@ -68,7 +68,7 @@ The service keeps the runs for 30 days. The API gives the last 48 runs of each j
 | Job | Schedule | What it does |
 |---|---|---|
 | `obell-uptime` | `*/5 * * * *` | Fetches obell.dev. Sends one email when the site goes down, and one when it comes back. A down is an HTTP status that is not 2xx, a network error, or no answer in 15 s. |
-| `obell-snapshot` | `0 * * * *` | Fetches obell.dev, and compares it with the last snapshot. A change is a `notice`, and its detail is a unified diff. |
+| `obell-snapshot` | `0 * * * *` | Fetches obell.dev, and compares it with the last snapshot. A change is a `notice`, and its detail is a unified diff. The job also sends one email with the diff. The first snapshot sends no email. |
 
 ## Run it
 
