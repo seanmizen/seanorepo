@@ -9,8 +9,6 @@ const Home: FC = () => {
     poop: () => alert('oops, poop!'),
   });
 
-  // The intentionality section is hidden while its first story is a draft.
-  // Its story pages still answer at their own paths.
   const subsections = [
     { component: <Github />, trigger: 'github' },
     { component: <Donate />, trigger: 'donate' },
