@@ -1,5 +1,5 @@
 import type { City } from './gen.ts';
-import { layout, type Pt } from './layout.ts';
+import { layout, type Pt, tubePath } from './layout.ts';
 import type { Line } from './net.ts';
 import { DEFAULTS, defaultOf, parse, TIER_DEFAULTS } from './params.ts';
 
@@ -395,29 +395,6 @@ function draw() {
     ((c % w) + 0.5) * px,
     (Math.floor(c / w) + 0.5) * px,
   ];
-  // Schematic legs between two stations: straight, then 45°. Always built from the
-  // lower cell index, so all lines between the same two stations share both legs.
-  const legs = (a: number, b: number) => {
-    const [p, e] = a < b ? [a, b] : [b, a];
-    const dx = (e % w) - (p % w);
-    const dy = Math.floor(e / w) - Math.floor(p / w);
-    const d = Math.min(Math.abs(dx), Math.abs(dy));
-    const k = e - Math.sign(dx) * d - Math.sign(dy) * d * w;
-    const out = k === p || k === e ? [p, e] : [p, k, e];
-    return a < b ? out : out.reverse();
-  };
-  // One-cell steps along a straight or 45° leg. Bundling works on these steps,
-  // so lines that use the same cells run side by side whatever their stations are.
-  const cells = (a: number, b: number) => {
-    const dx = Math.sign((b % w) - (a % w));
-    const dy = Math.sign(Math.floor(b / w) - Math.floor(a / w));
-    const out: number[] = [];
-    for (let c = a; c !== b; ) {
-      c += dx + dy * w;
-      out.push(c);
-    }
-    return out;
-  };
   const order = Object.keys(STYLE);
   const ids = s.lines
     .map((_, i) => i)
@@ -428,14 +405,7 @@ function draw() {
     );
   const lines = ids.map((i) => {
     const l = s.lines[i];
-    // A loop draws back to its first stop.
-    const st = l.loop ? [...l.stops, l.stops[0]] : l.stops;
-    return {
-      ...l,
-      path: st
-        .flatMap((c, k) => (k ? legs(st[k - 1], c).slice(1) : [c]))
-        .flatMap((c, k, p) => (k ? cells(p[k - 1], c) : [c])),
-    };
+    return { ...l, path: tubePath(l, w) };
   });
   const width = (l: Line) =>
     lineMode.value === 'by line' ? u : STYLE[l.tier][1] * lw;
@@ -443,14 +413,17 @@ function draw() {
   // Rounded corners: each bend is an arc no wider than half of either leg.
   const stroke = (all: Pt[], loop: boolean) => {
     // Remove points where the line goes straight on, so corners get their full radius.
+    // Keep the tip where a line turns back on itself.
     const p = all.filter((q, k) => {
       if (k === 0 || k === all.length - 1) return true;
       const [a, b] = [all[k - 1], all[k + 1]];
-      return (
-        Math.abs(
-          (q[0] - a[0]) * (b[1] - q[1]) - (q[1] - a[1]) * (b[0] - q[0]),
-        ) > 1e-6
-      );
+      const [ux, uy, vx, vy] = [
+        q[0] - a[0],
+        q[1] - a[1],
+        b[0] - q[0],
+        b[1] - q[1],
+      ];
+      return Math.abs(ux * vy - uy * vx) > 1e-6 || ux * vx + uy * vy < 0;
     });
     ctx.beginPath();
     ctx.moveTo(...p[0]);

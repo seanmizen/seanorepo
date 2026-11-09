@@ -2,8 +2,42 @@ import type { Line } from './net.ts';
 
 export type Pt = [number, number];
 
-// Tube-map layout. Lines that use the same cells run side by side, in the order given.
-// Rule: two neighbouring lines touch if they share a station anywhere. Otherwise a gap separates them.
+// The cells a line draws through on a map w cells wide. Between two stations: straight, then 45°,
+// always built from the lower cell index, so all lines between the same two stations share both legs.
+// Then one-cell steps, so lines that use the same cells run side by side whatever their stations are.
+// A loop draws back to its first stop.
+export function tubePath(l: Pick<Line, 'stops' | 'loop'>, w: number) {
+  const legs = (a: number, b: number) => {
+    const [p, e] = a < b ? [a, b] : [b, a];
+    const dx = (e % w) - (p % w);
+    const dy = Math.floor(e / w) - Math.floor(p / w);
+    const d = Math.min(Math.abs(dx), Math.abs(dy));
+    const k = e - Math.sign(dx) * d - Math.sign(dy) * d * w;
+    const out = k === p || k === e ? [p, e] : [p, k, e];
+    return a < b ? out : out.reverse();
+  };
+  const cells = (a: number, b: number) => {
+    const dx = Math.sign((b % w) - (a % w));
+    const dy = Math.sign(Math.floor(b / w) - Math.floor(a / w));
+    const out: number[] = [];
+    for (let c = a; c !== b; ) {
+      c += dx + dy * w;
+      out.push(c);
+    }
+    return out;
+  };
+  const st = l.loop ? [...l.stops, l.stops[0]] : l.stops;
+  return st
+    .flatMap((c, k) => (k ? legs(st[k - 1], c).slice(1) : [c]))
+    .flatMap((c, k, p) => (k ? cells(p[k - 1], c) : [c]));
+}
+
+// Tube-map layout. Each straight run of a line (its cell steps from one corner to the next) has one
+// offset from the cell centres, so a line never shifts sideways between corners. Runs are placed
+// longest first. A run on free cells gets offset 0. A later run gets the offset nearest 0, on the
+// side it enters from, that clears every placed run on any of its cells. Two lines touch if they
+// share a station anywhere. Otherwise a gap separates them. An offset is along the normal of the
+// step from its low cell to its high cell, so runs in opposite directions on the same cells agree.
 // Each station point sits on the line that stops there, so a line that passes a station shows no stop.
 export function layout(
   lines: Line[],
@@ -17,65 +51,70 @@ export function layout(
     return false;
   };
   const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
-
-  const bundles = new Map<string, number[]>();
-  lines.forEach((l, i) => {
-    for (let k = 1; k < l.path.length; k++) {
-      const s = key(l.path[k - 1], l.path[k]);
-      const b = bundles.get(s) ?? [];
-      if (!b.includes(i)) b.push(i);
-      bundles.set(s, b);
-    }
-  });
-
-  // Offset of each line from the segment centre, along the normal of the segment (low cell to high cell).
-  const offset = new Map<string, Map<number, number>>();
-  for (const [s, ids] of bundles) {
-    const m = new Map<number, number>();
-    let total = 0;
-    ids.forEach((i, j) => {
-      if (j > 0 && !share(ids[j - 1], i)) total += gap;
-      const w = width(lines[i]);
-      m.set(i, total + w / 2);
-      total += w;
-    });
-    for (const [i, o] of m) m.set(i, o - total / 2);
-    offset.set(s, m);
-  }
-
-  // Orient each segment's normal to agree with the segment before it, on the first line
-  // that uses it. Without this, the normal flips at some turns and the bundle twists.
   const raw = (a: number, b: number): Pt => {
     const [ax, ay] = at(Math.min(a, b));
     const [bx, by] = at(Math.max(a, b));
     const len = Math.hypot(bx - ax, by - ay);
     return [-(by - ay) / len, (bx - ax) / len];
   };
-  const sign = new Map<string, number>();
-  for (const l of lines)
-    for (let k = 1; k < l.path.length; k++) {
-      const s = key(l.path[k - 1], l.path[k]);
-      if (sign.has(s)) continue;
-      const [px, py] = k > 1 ? raw(l.path[k - 2], l.path[k - 1]) : [0, 0];
-      const [nx, ny] = raw(l.path[k - 1], l.path[k]);
-      const before =
-        k > 1 ? (sign.get(key(l.path[k - 2], l.path[k - 1])) ?? 1) : 1;
-      sign.set(s, (px * nx + py * ny) * before >= 0 ? 1 : -1);
-    }
 
-  // Each path point moves to the corner where the two offset segments on each side meet.
-  // An offset of 0 counts, so a line keeps its own direction up to the corner where it
-  // joins a bundle. On a straight run with a change of offset, the larger offset wins.
+  // Runs as path indices: line i goes straight from path[a] to path[b].
+  const runs: { i: number; a: number; b: number }[] = [];
+  lines.forEach(({ path: p }, i) => {
+    for (let a = 0, k = 1; k < p.length; k++)
+      if (k === p.length - 1 || p[k + 1] - p[k] !== p[k] - p[k - 1]) {
+        runs.push({ i, a, b: k });
+        a = k;
+      }
+  });
+  // off[i][k] is the offset of line i on the step from path[k - 1] to path[k].
+  const off = lines.map((l) => l.path.map(() => 0));
+  const placed = new Map<string, { i: number; o: number }[]>();
+  runs.sort((x, y) => y.b - y.a - (x.b - x.a));
+  for (const { i, a, b } of runs) {
+    const p = lines[i].path;
+    // A run that goes back over its own line keeps that offset, so an out-and-back is one stroke.
+    let own: number | undefined;
+    const clear: Pt[] = [];
+    for (let k = a + 1; k <= b; k++)
+      for (const q of placed.get(key(p[k - 1], p[k])) ?? []) {
+        if (q.i === i) own = q.o;
+        else
+          clear.push([
+            q.o,
+            (width(lines[i]) + width(lines[q.i])) / 2 +
+              (share(i, q.i) ? 0 : gap),
+          ]);
+      }
+    const [nx, ny] = raw(p[a], p[a + 1]);
+    const [x, y] = at(p[a]);
+    const [px, py] = a > 0 ? at(p[a - 1]) : [x, y];
+    const side = (px - x) * nx + (py - y) * ny < 0 ? -1 : 1;
+    const o =
+      own ??
+      [0, ...clear.flatMap(([q, c]) => [q - c, q + c])]
+        .filter((v) => v * side >= 0)
+        .sort((u, v) => Math.abs(u) - Math.abs(v))
+        .find((v) => clear.every(([q, c]) => Math.abs(v - q) > c - 1e-9)) ??
+      0;
+    for (let k = a + 1; k <= b; k++) {
+      off[i][k] = o;
+      const list = placed.get(key(p[k - 1], p[k])) ?? [];
+      list.push({ i, o });
+      placed.set(key(p[k - 1], p[k]), list);
+    }
+  }
+
+  // Each path point moves to the corner where the two offset steps on each side meet.
+  // A loop closes at its first point, so there the steps on each side are its last and first.
   const pts = lines.map((l, i) =>
     l.path.map((c, k): Pt => {
       const [x, y] = at(c);
-      const side = [k - 1, k + 1]
-        .filter((j) => j >= 0 && j < l.path.length)
-        .map((j) => {
-          const s = key(c, l.path[j]);
-          const [nx, ny] = raw(c, l.path[j]);
-          return [nx, ny, (offset.get(s)?.get(i) ?? 0) * (sign.get(s) ?? 1)];
-        });
+      const n = l.path.length;
+      const ends = l.loop && (k === 0 || k === n - 1);
+      const side = (ends ? [n - 1, 1] : [k, k + 1])
+        .filter((j) => j > 0 && j < n)
+        .map((j) => [...raw(l.path[j - 1], l.path[j]), off[i][j]]);
       if (side.length === 1)
         return [x + side[0][0] * side[0][2], y + side[0][1] * side[0][2]];
       const [[ax, ay, ao], [bx, by, bo]] = side;
