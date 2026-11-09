@@ -13,6 +13,7 @@ import { LastUpdated, Portrait, ThemeToggle } from '@/components';
 import { ThemeContext, ThemeProvider } from '@/providers';
 import {
   BabyComeBack,
+  Cron,
   HireLab,
   Home,
   Projects,
@@ -76,6 +77,8 @@ const App: FC = () => {
           <Route path="/projects/shaders/thirty" element={<ThirtyPreview />} />
           <Route path="/shaders-hire" element={<HireLab />} />
           <Route path="/babycomeback" element={<BabyComeBack />} />
+          {/* The scheduled jobs. apps/cron serves its data at /api/cron. */}
+          <Route path="/cron" element={<Cron />} />
           <Route element={<Layout />}>
             <Route path="/projects" element={<Projects />} />
             <Route path="/*" element={<Home />} />

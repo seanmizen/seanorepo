@@ -1,0 +1,98 @@
+/*
+  The jobs take the same column as /projects. Each status has a colour, and
+  each run in the strip also has its status in text, so the page works with
+  no styles and with no colour.
+*/
+@media (min-width: 48rem) {
+  .page {
+    max-width: min(42rem, calc(60vw - 1rem));
+  }
+}
+
+.page {
+  padding: 0;
+}
+
+.job {
+  margin-top: 1.5rem;
+}
+
+.job h2 {
+  font-size: 1.25rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 1rem;
+}
+
+.facts dd {
+  overflow-wrap: anywhere;
+}
+
+/* The site's code style is a block for snippets. Here it is one inline token. */
+.facts code {
+  padding: 0 0.4rem;
+  margin: 0;
+}
+
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  list-style: none;
+  padding: 0.2rem 0;
+}
+
+.strip li {
+  width: 0.6rem;
+  height: 1rem;
+  padding: 0;
+  border-radius: 1px;
+}
+
+.ok {
+  background: #4a9;
+}
+
+.notice {
+  background: #48c;
+}
+
+.alert {
+  background: #d43;
+}
+
+.error {
+  background: repeating-linear-gradient(45deg, #d43 0 2px, transparent 2px 4px);
+  outline: 1px solid #d43;
+  outline-offset: -1px;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  padding: 0;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+}
+
+.detail pre {
+  max-height: 24rem;
+  overflow: auto;
+}
+
+/* A diff needs its spaces. The site's code style collapses them (pre-line). */
+.detail pre code {
+  display: block;
+  margin: 0;
+  padding: 0.5rem;
+  white-space: pre;
+  font-size: 0.75rem;
+}
+
+.runs {
+  font-size: 0.9rem;
+}

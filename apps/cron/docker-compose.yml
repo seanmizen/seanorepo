@@ -1,0 +1,57 @@
+# cron - the jobs in src/registry.ts, and the data of seanmizen.com/cron.
+# Port 4001: the backend of the seanmizen.com pair (4000 is the frontend).
+# The tunnel sends seanmizen.com/api/* here.
+
+x-cron-base: &cron-base
+  container_name: cron
+  build:
+    context: ../..
+    dockerfile: apps/cron/dockerfile
+    target: ${BUILD_TARGET:-dev}
+  ports:
+    - "${PUBLISH_ADDR:-127.0.0.1}:4001:4001"
+
+services:
+  cron:
+    <<: *cron-base
+    profiles: ["prod"]
+    restart: unless-stopped
+    # The email values (SMTP_*, CRON_EMAIL_TO). The server secrets live in
+    # /etc/seanorepo (REQ-SERVER-021). required: false, so `yarn prod:docker`
+    # also runs on a computer with no secrets. Without the file, email is
+    # off: each email goes to the log.
+    env_file:
+      - path: /etc/seanorepo/cron.env
+        required: false
+    volumes:
+      - cron_data:/data
+    # The edge routes to this service by its alias (infra/edge).
+    networks:
+      default: {}
+      edge:
+        aliases: [cron]
+
+  cron-dev:
+    <<: *cron-base
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - type: bind
+        source: ../..
+        target: /app
+      - cron_node_modules:/app/node_modules
+      - cron_dev_data:/data
+    profiles: ["dev"]
+
+volumes:
+  # The runs, and the last snapshot of each job. They exist only on the
+  # machine that runs the prod profile.
+  cron_data:
+  cron_dev_data:
+  cron_node_modules:
+
+networks:
+  # Shared with infra/edge. deploy.sh and prod:docker create it.
+  edge:
+    external: true
