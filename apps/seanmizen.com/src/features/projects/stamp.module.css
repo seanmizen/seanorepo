@@ -37,7 +37,6 @@
     filter 200ms;
 }
 
-.stampRow:hover .card,
 .stampRow:has(a:focus-visible) .card,
 .card:focus-within,
 .card.placed {
@@ -45,6 +44,17 @@
   width: 13.4rem;
   rotate: 0deg;
   filter: drop-shadow(0 8px 16px #0005);
+}
+
+/* Only a real pointer hovers. A touch screen keeps :hover on whatever is
+   under the last tap, which after a page change is a new row. */
+@media (hover: hover) {
+  .stampRow:hover .card {
+    z-index: 5;
+    width: 13.4rem;
+    rotate: 0deg;
+    filter: drop-shadow(0 8px 16px #0005);
+  }
 }
 
 /* A grace border: the card keeps the hover for 5px past its edge, so a
@@ -82,10 +92,16 @@
   transition: opacity 150ms;
 }
 
-.card:hover > :is(.handle, .back),
 .card:focus-within > :is(.handle, .back) {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .card:hover > :is(.handle, .back) {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .handle {
@@ -177,9 +193,11 @@
 
 /* Just home after a click: hover does not open the card until the pointer
    moves. */
-.stampRow:hover .card.resting:not(:focus-within) {
-  z-index: 1;
-  width: 100%;
-  rotate: -2deg;
-  filter: drop-shadow(0 1px 2px #0004);
+@media (hover: hover) {
+  .stampRow:hover .card.resting:not(:focus-within) {
+    z-index: 1;
+    width: 100%;
+    rotate: -2deg;
+    filter: drop-shadow(0 1px 2px #0004);
+  }
 }

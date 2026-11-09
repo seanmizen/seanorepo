@@ -18,10 +18,16 @@
   user has no cursor to tell them where they are, so the focused affordance
   must never be weaker than the hovered one.
 */
-.trigger:hover,
 .trigger:focus-visible {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 .trigger:active {

@@ -22,7 +22,12 @@
   opacity: 0.5;
 }
 
-.link:hover .marker,
 .link:focus-visible .marker {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .link:hover .marker {
+    opacity: 1;
+  }
 }

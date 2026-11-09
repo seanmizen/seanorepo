@@ -16,8 +16,10 @@
   color: var(--color);
 }
 
-.theme-toggle-button:hover {
-  opacity: 1;
+@media (hover: hover) {
+  .theme-toggle-button:hover {
+    opacity: 1;
+  }
 }
 
 .theme-toggle-button:active {
