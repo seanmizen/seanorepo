@@ -78,7 +78,51 @@ function through(city: City, ways: number[]) {
   return { path, at };
 }
 
+// The catchment demand of each cell: the homes and jobs of the cells within r cells.
+// mean: the mean catchment demand of the land cells. Computed once for each city and radius.
+const catchCache = new WeakMap<
+  City,
+  Map<number, { d: Float64Array; mean: number }>
+>();
+function catchment(city: City, r: number) {
+  const { w } = city;
+  let byR = catchCache.get(city);
+  if (!byR) {
+    byR = new Map();
+    catchCache.set(city, byR);
+  }
+  const hit = byR.get(r);
+  if (hit) return hit;
+  // row[y * (w + 1) + x]: the demand of cells 0 to x - 1 of row y.
+  const row = new Float64Array(w * (w + 1));
+  for (let y = 0; y < w; y++)
+    for (let x = 0; x < w; x++)
+      row[y * (w + 1) + x + 1] =
+        row[y * (w + 1) + x] + city.pop[y * w + x] + city.jobs[y * w + x];
+  const d = new Float64Array(w * w);
+  const R = Math.floor(r);
+  let sum = 0;
+  let land = 0;
+  for (let y = 0; y < w; y++)
+    for (let x = 0; x < w; x++) {
+      for (let dy = Math.max(-R, -y); dy <= Math.min(R, w - 1 - y); dy++) {
+        const h = Math.floor(Math.sqrt(r * r - dy * dy));
+        const o = (y + dy) * (w + 1);
+        d[y * w + x] +=
+          row[o + Math.min(w, x + h + 1)] - row[o + Math.max(0, x - h)];
+      }
+      if (!city.water[y * w + x]) {
+        sum += d[y * w + x];
+        land++;
+      }
+    }
+  const c = { d, mean: sum / Math.max(land, 1) };
+  byR.set(r, c);
+  return c;
+}
+
 // Stops at the tier spacing, on land only. The last stop is the end of the path.
+// A spacing stop needs a catchment demand (radius half a spacing) of p.stopMin x the land mean.
 // "at": path indices that must be stops. With "only", the stops are at those indices only.
 // A spacing stop less than half a spacing before a must-stop moves to that must-stop.
 // A loop path ends at its first cell. That last stop is removed, and its segment closes the loop.
@@ -96,6 +140,7 @@ function makeLine(
   only = false,
 ): Line {
   const t = p.tierDefs[tier];
+  const { d: demand, mean } = catchment(city, t.spacing / 2 / city.cellM);
   const stops = [path[0]];
   const segs: number[] = [];
   let since = 0;
@@ -111,7 +156,13 @@ function makeLine(
       segs[segs.length - 1] += since;
       since = 0;
       fixed = true;
-    } else if (must || (!only && since >= t.spacing && !city.water[path[k]])) {
+    } else if (
+      must ||
+      (!only &&
+        since >= t.spacing &&
+        !city.water[path[k]] &&
+        demand[path[k]] >= p.stopMin * mean)
+    ) {
       stops.push(path[k]);
       segs.push(since);
       since = 0;

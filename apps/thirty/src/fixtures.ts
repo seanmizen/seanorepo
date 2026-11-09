@@ -62,10 +62,10 @@ export const DIFFERENT = [
 // Index (0-based) to hash. The defaults of the station prices, snap, shapes, join and goal must not change these.
 export const HASHES: Record<number, string> = {
   1: 'e743d456',
-  2: 'ad2bd194',
-  6: '409fb2f7',
-  13: '97e8ebab',
-  22: '7d723836',
-  30: '81ec0c4d',
-  31: '674b9db6',
+  2: '552ab394',
+  6: '371a73e4',
+  13: '005a7f18',
+  22: 'c62cccbb',
+  30: '9c01aeca',
+  31: '69c6ec44',
 };
