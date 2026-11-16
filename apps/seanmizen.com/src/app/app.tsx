@@ -19,6 +19,7 @@ import {
   Projects,
   Shaders,
   ThirtyPreview,
+  WhyKikiShouldHireMe,
 } from './routes';
 import '../index.css';
 
@@ -90,6 +91,10 @@ const App: FC = () => {
           <Route path="/projects/shaders/thirty" element={<ThirtyPreview />} />
           <Route path="/shaders-hire" element={<HireLab />} />
           <Route path="/babycomeback" element={<BabyComeBack />} />
+          <Route
+            path="/why-kiki-should-hire-me"
+            element={<WhyKikiShouldHireMe />}
+          />
           {/* The scheduled jobs. apps/cron serves its data at /api/cron. */}
           <Route path="/cron" element={<Cron />} />
           <Route element={<Layout />}>

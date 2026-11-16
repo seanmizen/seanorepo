@@ -4,3 +4,4 @@ export { HireLab } from './hire-lab';
 export { Home } from './home';
 export { Projects } from './projects';
 export { Shaders, ThirtyPreview } from './shaders';
+export { WhyKikiShouldHireMe } from './why-kiki-should-hire-me';
