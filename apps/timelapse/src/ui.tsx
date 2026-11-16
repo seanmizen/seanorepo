@@ -51,19 +51,24 @@ export function Label({
   );
 }
 
-/** One setting: its name above its control. */
+/** One setting: a line with its name and its value, then its controls. */
 export function Row({
   label,
+  value,
   children,
 }: {
   label: string;
+  value: string;
   children: ReactNode;
 }) {
   return (
     <View style={styles.row}>
-      <Label muted size={12}>
-        {label.toUpperCase()}
-      </Label>
+      <View style={styles.rowHead}>
+        <Label muted size={11}>
+          {label.toUpperCase()}
+        </Label>
+        <Label size={13}>{value}</Label>
+      </View>
       <View style={styles.rowBody}>{children}</View>
     </View>
   );
@@ -104,7 +109,7 @@ export function Button({
         style={{
           color: selected ? t.bg : t.fg,
           fontFamily: FONT,
-          fontSize: 14,
+          fontSize: 13,
           textAlign: 'center',
         }}
       >
@@ -120,16 +125,14 @@ export function Choice<T extends string | number>({
   value,
   onChange,
   disabled,
-  column,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
-  column?: boolean;
 }) {
   return (
-    <View style={column ? styles.column : styles.choices}>
+    <View style={styles.choices}>
       {options.map((o) => (
         <Button
           key={String(o.value)}
@@ -137,43 +140,9 @@ export function Choice<T extends string | number>({
           selected={o.value === value}
           disabled={disabled}
           onPress={() => onChange(o.value)}
-          grow={!column}
+          grow
         />
       ))}
-    </View>
-  );
-}
-
-/** A value with a "-" and a "+" button that step through a list of values. */
-export function Stepper({
-  values,
-  value,
-  format,
-  onChange,
-  disabled,
-}: {
-  values: number[];
-  value: number;
-  format: (value: number) => string;
-  onChange: (value: number) => void;
-  disabled?: boolean;
-}) {
-  const i = values.indexOf(value);
-  return (
-    <View style={styles.stepper}>
-      <Button
-        label="-"
-        disabled={disabled || i <= 0}
-        onPress={() => onChange(values[i - 1])}
-      />
-      <View style={styles.stepperValue}>
-        <Label size={16}>{format(value)}</Label>
-      </View>
-      <Button
-        label="+"
-        disabled={disabled || i >= values.length - 1}
-        onPress={() => onChange(values[i + 1])}
-      />
     </View>
   );
 }
@@ -185,7 +154,6 @@ const STEP_KEYS: Record<string, number> = {
   ArrowLeft: -1,
   ArrowDown: -1,
 };
-const MARK_W = 56;
 
 /**
  * A slider over a list of values, on a log scale. A tap or a drag selects
@@ -199,7 +167,6 @@ export function Slider({
   label,
   values,
   value,
-  marks,
   format,
   onChange,
   disabled,
@@ -207,7 +174,6 @@ export function Slider({
   label: string;
   values: number[];
   value: number;
-  marks: number[];
   format: (value: number) => string;
   onChange: (value: number) => void;
   disabled?: boolean;
@@ -231,7 +197,7 @@ export function Slider({
     if (next !== undefined) onChange(next);
   };
   return (
-    <View style={{ opacity: disabled ? 0.4 : 1 }}>
+    <View style={{ flex: 1, opacity: disabled ? 0.4 : 1 }}>
       <View
         accessible
         focusable={!disabled}
@@ -274,23 +240,6 @@ export function Slider({
             { left: percent(value), borderColor: t.fg, backgroundColor: t.bg },
           ]}
         />
-      </View>
-      <View style={styles.marks}>
-        {marks.map((m, i) => (
-          <View
-            key={m}
-            style={[
-              styles.mark,
-              { left: percent(m) },
-              i === 0 && styles.markFirst,
-              i === marks.length - 1 && styles.markLast,
-            ]}
-          >
-            <Label muted size={11}>
-              {format(m)}
-            </Label>
-          </View>
-        ))}
       </View>
     </View>
   );
@@ -355,22 +304,28 @@ export function Notice({
 }
 
 const styles = StyleSheet.create({
-  row: { paddingVertical: 10, gap: 6 },
-  rowBody: { gap: 8 },
+  row: { paddingVertical: 4, gap: 4 },
+  rowHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  rowBody: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   button: {
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minWidth: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   grow: { flexGrow: 1 },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  column: { gap: 6 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepperValue: { flex: 1, alignItems: 'center' },
-  track: { height: 36, marginHorizontal: THUMB / 2, justifyContent: 'center' },
+  choices: { flex: 1, flexDirection: 'row', gap: 6 },
+  track: {
+    height: 32,
+    marginHorizontal: THUMB / 2,
+    justifyContent: 'center',
+  },
   rail: {
     position: 'absolute',
     height: 2,
@@ -386,25 +341,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     pointerEvents: 'none',
   },
-  marks: { height: 16, marginHorizontal: THUMB / 2 },
-  mark: {
-    position: 'absolute',
-    width: MARK_W,
-    marginLeft: -MARK_W / 2,
-    alignItems: 'center',
-  },
-  markFirst: { marginLeft: -THUMB / 2, alignItems: 'flex-start' },
-  markLast: { marginLeft: THUMB / 2 - MARK_W, alignItems: 'flex-end' },
   shutter: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterDot: { width: 52, height: 52, borderRadius: 26 },
-  shutterStop: { width: 26, height: 26 },
+  shutterDot: { width: 42, height: 42, borderRadius: 21 },
+  shutterStop: { width: 22, height: 22 },
   notice: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
