@@ -77,6 +77,12 @@ http://thirty.{$EDGE_HOST}.local {
 	reverse_proxy thirty:4110
 }
 
+# Plain HTTP is not a secure context, so the browser gives the page no
+# webcam here. The page shows the settings and a message.
+http://timelapse.{$EDGE_HOST}.local {
+	reverse_proxy timelapse:4120
+}
+
 http://seansconverter.{$EDGE_HOST}.local {
 	handle /api/* {
 		reverse_proxy seansconverter-backend:4051

@@ -1,0 +1,35 @@
+# timelapse.seanmizen.com: the Expo web export (index.html and one script
+# bundle), served by `serve` on 4120. The same pattern as apps/thirty. There
+# is no backend. The phone app does not use this image: it runs in Expo Go.
+
+FROM node:24-slim AS dev
+WORKDIR /app/apps/timelapse
+ENV EXPO_NO_TELEMETRY=1 CI=1
+# docker-compose bind-mounts the monorepo at /app, with empty volumes for
+# node_modules. The install fills them.
+CMD ["sh", "-c", "yarn workspaces focus timelapse && yarn expo start --web --port 4120"]
+
+FROM node:24-slim AS prod-build
+WORKDIR /app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases ./.yarn/releases
+COPY apps/timelapse/package.json ./apps/timelapse/
+
+RUN yarn workspaces focus timelapse
+
+COPY apps/timelapse/index.ts apps/timelapse/app.json apps/timelapse/tsconfig.json ./apps/timelapse/
+COPY apps/timelapse/src ./apps/timelapse/src
+
+ENV NODE_ENV=production EXPO_NO_TELEMETRY=1 CI=1
+RUN yarn workspace timelapse build
+
+FROM node:24-slim AS prod
+WORKDIR /app
+COPY --from=prod-build /app/apps/timelapse/dist .
+RUN npm install -g serve
+EXPOSE 4120
+# No -s: the app has no client routes, so a missing file is a 404 and never
+# index.html. serve sends no X-Frame-Options and no CSP, so seanmizen.com can
+# show the app in an <iframe allow="camera">.
+CMD ["serve", ".", "-l", "4120"]
