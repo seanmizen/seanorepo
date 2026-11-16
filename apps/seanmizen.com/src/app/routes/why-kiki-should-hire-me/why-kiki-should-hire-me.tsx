@@ -1,9 +1,12 @@
 import type { FC } from 'react';
-import { SiteTitle } from '@/components';
+import { ExternalLink, SiteTitle } from '@/components';
 import styles from './why-kiki-should-hire-me.module.css';
 
 /* robots.txt keeps crawlers out of /why-kiki/: the CV has a phone number. */
 const CV = '/why-kiki/Sean-Mizen-Engineer-CV-2026-09-18.pdf';
+
+/* The default Lisbon run of thirty. ?embed makes thirty show the map only. */
+const THIRTY = 'https://thirty.seanmizen.com/?city=lisbon';
 
 /*
   Three artefacts, each with a caption, and then Sean's blurb. The blurb is
@@ -59,10 +62,35 @@ const WhyKikiShouldHireMe: FC = () => (
         <figcaption>He can ship fast.</figcaption>
       </figure>
 
-      {/* The third artefact is not chosen yet. */}
+      {/*
+        The live thirty run. The frame takes no pointer events, so the map
+        cannot catch the page scroll. The link around it opens the full page.
+      */}
       <figure className={styles.artefact}>
-        <div className={styles.placeholder}>Another artefact. Soon.</div>
-        <figcaption>He has taste.</figcaption>
+        <a
+          className={styles.map}
+          href={THIRTY}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <iframe
+            src={`${THIRTY}&embed`}
+            title="thirty: the Lisbon run"
+            loading="lazy"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <span className="sr-only">
+            The Lisbon run on thirty.seanmizen.com (opens in a new tab)
+          </span>
+        </a>
+        <figcaption>
+          <p className={styles.note}>
+            <ExternalLink href={THIRTY}>thirty.seanmizen.com</ExternalLink> - a
+            transit network optimiser built for the web. looks very cool.
+          </p>
+          He has taste.
+        </figcaption>
       </figure>
 
       <section className={styles.blurb}>
