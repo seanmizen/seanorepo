@@ -11,3 +11,39 @@
 .half {
   padding: 0;
 }
+
+.artefact {
+  margin-top: 1.5rem;
+}
+
+/* The video keeps its aspect ratio and never gets wider than the column. */
+.media {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0;
+}
+
+/* A slot for an artefact that is not on the page yet. */
+.placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 8rem;
+  border: 2px dashed currentColor;
+  opacity: 0.6;
+}
+
+.artefact figcaption {
+  padding-top: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.blurb {
+  margin-top: 2.5rem;
+  padding-bottom: 3rem;
+}
+
+.blurb p {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
