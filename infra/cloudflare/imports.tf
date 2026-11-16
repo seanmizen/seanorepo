@@ -202,3 +202,8 @@ import {
   to = cloudflare_dns_record.seanmizen_com_thirty_cname
   id = "428a9a9f5e22c95bc7e67faa7d5ab942/c474c2e74e270af9eceaedf70b99ebad"
 }
+
+import {
+  to = cloudflare_dns_record.seanmizen_com_timelapse_cname
+  id = "428a9a9f5e22c95bc7e67faa7d5ab942/e6e684abc33bb3937c9f65fc20b4824d"
+}
