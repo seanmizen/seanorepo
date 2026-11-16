@@ -53,6 +53,28 @@
   opacity: 0.6;
 }
 
+/* The thirty frame is square, like the thirty canvas. */
+.map {
+  display: block;
+  aspect-ratio: 1;
+  padding: 0;
+  background: #111;
+}
+
+.map iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+.note {
+  padding: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+
 .artefact figcaption {
   padding-top: 0.5rem;
   font-size: 1.1rem;

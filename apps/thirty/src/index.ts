@@ -26,6 +26,12 @@ type Snap = {
 } & Partial<Score>;
 
 const q = new URLSearchParams(location.search);
+// ?embed shows only the map and the data credit, for a page that frames thirty.
+// It is not a run parameter, so it comes off the query before parse() and the worker see it.
+const embed = q.has('embed');
+q.delete('embed');
+const CREDIT =
+  'Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus';
 const value = (k: string) => q.get(k) ?? defaultOf(k);
 // The setup form, in groups. A parameter in no group goes in Other, so new ones show with no UI change.
 const GROUPS: [string, string[]][] = [
@@ -132,8 +138,9 @@ th label{display:inline;width:auto;margin:0}
 td input{width:44px}
 input[type=checkbox]{width:auto}
 @media (max-width:700px){#side{height:auto}}
+${embed ? 'body{background:#111}#app{justify-content:center;align-items:center}#side{display:none}#credit{position:fixed;left:0;right:0;bottom:0;margin:0;padding:2px 6px;font-size:10px;color:#ddd;background:rgba(0,0,0,.6)}' : ''}
 </style>
-<div id="app"><canvas id="c"></canvas><div id="side">
+<div id="app"><canvas id="c"></canvas>${embed && q.get('city') ? `<p id="credit">${CREDIT}</p>` : ''}<div id="side">
 <h1>thirty</h1>
 <p>Each cell shows the share of jobs it reaches within N minutes. Brighter is better.</p>
 <p id="s">Loading…</p>
@@ -144,7 +151,7 @@ input[type=checkbox]{width:auto}
 <div id="k"></div>
 <form id="f"><h3>Setup</h3>${groups}${tierTable}
 <p><button>Run</button> <a href="?">Reset</a> · cities: <a href="?city=london">London</a> <a href="?city=lisbon">Lisbon</a></p></form>
-<p><small>commit ${GIT_SHA}${q.get('city') ? ' · Data: © OpenStreetMap contributors (ODbL), GHSL © European Union (CC BY 4.0), Copernicus DEM © ESA/DLR/Airbus' : ''}</small></p>
+<p><small>commit ${GIT_SHA}${q.get('city') ? ` · ${CREDIT}` : ''}</small></p>
 </div></div>`;
 
 const $ = <T extends HTMLElement>(id: string) =>
@@ -159,8 +166,11 @@ const form = $<HTMLFormElement>('f');
 const key = $('k');
 
 // The canvas fills the height of the window, and leaves 320 px for the column.
+// In embed mode there is no column, so the canvas is the largest square that fits.
 function fit() {
-  const css = Math.max(280, Math.min(innerHeight, innerWidth - 320));
+  const css = embed
+    ? Math.min(innerWidth, innerHeight)
+    : Math.max(280, Math.min(innerHeight, innerWidth - 320));
   canvas.style.width = canvas.style.height = `${css}px`;
   canvas.width = canvas.height = Math.round(css * devicePixelRatio);
   draw();
