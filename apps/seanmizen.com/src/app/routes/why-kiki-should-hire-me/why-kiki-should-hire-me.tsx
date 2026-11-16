@@ -1,5 +1,4 @@
 import type { FC } from 'react';
-import { useState } from 'react';
 import { ExternalLink, SiteTitle } from '@/components';
 import styles from './why-kiki-should-hire-me.module.css';
 
@@ -15,43 +14,6 @@ const THIRTY = 'https://thirty.seanmizen.com/?city=lisbon';
 const THIRTY_EMBED = `${
   import.meta.env.DEV ? 'http://localhost:4110' : 'https://thirty.seanmizen.com'
 }/?city=lisbon&embed`;
-
-/*
-  The timelapse app (apps/timelapse). The dev build frames the local Expo web
-  server (`yarn workspace timelapse web`).
-*/
-const TIMELAPSE = 'https://timelapse.seanmizen.com';
-const TIMELAPSE_FRAME = import.meta.env.DEV
-  ? 'http://localhost:8081'
-  : TIMELAPSE;
-
-/*
-  The app asks for the webcam as soon as it loads. So the frame loads only
-  when the reader clicks, and the camera prompt never comes as a surprise.
-  The frame takes the focus, because the button it replaces had it.
-*/
-const TimelapseApp: FC = () => {
-  const [open, setOpen] = useState(false);
-  if (!open)
-    return (
-      <button
-        type="button"
-        className={styles.launch}
-        onClick={() => setOpen(true)}
-      >
-        Open the timelapse app here. It asks for your camera.
-      </button>
-    );
-  return (
-    <iframe
-      ref={(frame) => frame?.focus()}
-      className={styles.app}
-      src={TIMELAPSE_FRAME}
-      title="The timelapse app"
-      allow="camera"
-    />
-  );
-};
 
 /*
   Three artefacts, each with a caption, and then Sean's blurb. The blurb is
@@ -98,18 +60,13 @@ const WhyKikiShouldHireMe: FC = () => (
         <figcaption>He loves hard work and a timelapse.</figcaption>
       </figure>
 
+      {/* The Expo timelapse app goes here when it is live. */}
       <figure className={styles.artefact}>
-        <TimelapseApp />
-        <figcaption>
-          He can ship fast.{' '}
-          <span className={styles.note}>
-            (
-            <ExternalLink href={TIMELAPSE}>
-              timelapse.seanmizen.com
-            </ExternalLink>
-            )
-          </span>
-        </figcaption>
+        <div className={styles.placeholder}>
+          A React Native app I'm building right this second. You caught me
+          off-guard. Check back in at 5pm and it'll be here
+        </div>
+        <figcaption>He can ship fast.</figcaption>
       </figure>
 
       {/*
@@ -152,8 +109,9 @@ const WhyKikiShouldHireMe: FC = () => (
           The Kiki mission looks pretty cool.
           <br />
           The Team looks pretty cool.
+          <br />I love a bit of optimism.
           <br />
-          And I love a bit of optimism.
+          And I, too, am shocked that Robert Pattinson is the next Bond.
         </p>
         <p>
           Thanks to AI I’m a polyglot. I use Go, Zig apps daily which I built
