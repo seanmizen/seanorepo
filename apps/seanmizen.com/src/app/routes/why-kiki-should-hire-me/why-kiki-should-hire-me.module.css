@@ -1,0 +1,13 @@
+/*
+  The content takes the same column as /projects: at most 42rem, or
+  60vw - 1rem on a narrower page. Phones get the full width.
+*/
+@media (min-width: 48rem) {
+  .half {
+    max-width: min(42rem, calc(60vw - 1rem));
+  }
+}
+
+.half {
+  padding: 0;
+}
