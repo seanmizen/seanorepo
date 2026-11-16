@@ -1,3 +1,4 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+# The why-kiki files include a CV with a phone number.
+Disallow: /why-kiki/
