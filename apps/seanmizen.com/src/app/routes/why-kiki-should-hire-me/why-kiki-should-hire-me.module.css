@@ -56,6 +56,7 @@
 /* The thirty frame is square, like the thirty canvas. */
 .map {
   display: block;
+  max-width: 20rem;
   aspect-ratio: 1;
   padding: 0;
   background: #111;
@@ -70,9 +71,11 @@
   pointer-events: none;
 }
 
+/* The annotation after a caption: smaller and lighter. */
 .note {
-  padding: 0 0 0.3rem;
-  font-size: 0.95rem;
+  padding: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .artefact figcaption {
