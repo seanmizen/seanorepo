@@ -47,6 +47,8 @@
   display: grid;
   place-items: center;
   min-height: 8rem;
+  padding: 1rem;
+  text-align: center;
   border: 2px dashed currentColor;
   opacity: 0.6;
 }
@@ -68,4 +70,9 @@
 .blurb p {
   margin-bottom: 1rem;
   line-height: 1.5;
+}
+
+/* The site gives every element padding. Inline italics need none. */
+.blurb em {
+  padding: 0;
 }
