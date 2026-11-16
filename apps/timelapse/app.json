@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Timelapse",
+    "slug": "timelapse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.seanmizen.timelapse"
+    },
+    "android": {
+      "package": "com.seanmizen.timelapse"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Timelapse uses the camera to take the frames.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Timelapse saves the frames to your photos.",
+          "granularPermissions": ["photo"]
+        }
+      ]
+    ]
+  }
+}
