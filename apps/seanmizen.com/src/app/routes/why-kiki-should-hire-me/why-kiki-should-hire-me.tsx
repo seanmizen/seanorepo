@@ -5,8 +5,15 @@ import styles from './why-kiki-should-hire-me.module.css';
 /* robots.txt keeps crawlers out of /why-kiki/: the CV has a phone number. */
 const CV = '/why-kiki/Sean-Mizen-Engineer-CV-2026-09-18.pdf';
 
-/* The default Lisbon run of thirty. ?embed makes thirty show the map only. */
+/*
+  The default Lisbon run of thirty. ?embed makes thirty show the map only.
+  The dev build frames the local thirty (`yarn workspace thirty start`), so a
+  change to thirty shows before a release.
+*/
 const THIRTY = 'https://thirty.seanmizen.com/?city=lisbon';
+const THIRTY_EMBED = `${
+  import.meta.env.DEV ? 'http://localhost:4110' : 'https://thirty.seanmizen.com'
+}/?city=lisbon&embed`;
 
 /*
   Three artefacts, each with a caption, and then Sean's blurb. The blurb is
@@ -74,7 +81,7 @@ const WhyKikiShouldHireMe: FC = () => (
           rel="noopener noreferrer"
         >
           <iframe
-            src={`${THIRTY}&embed`}
+            src={THIRTY_EMBED}
             title="thirty: the Lisbon run"
             loading="lazy"
             tabIndex={-1}
@@ -85,11 +92,11 @@ const WhyKikiShouldHireMe: FC = () => (
           </span>
         </a>
         <figcaption>
-          <p className={styles.note}>
-            <ExternalLink href={THIRTY}>thirty.seanmizen.com</ExternalLink> - a
-            transit network optimiser built for the web. looks very cool.
-          </p>
-          He has taste.
+          He has taste.{' '}
+          <span className={styles.note}>
+            (<ExternalLink href={THIRTY}>thirty.seanmizen.com</ExternalLink> - a
+            transit network optimiser built for the web. looks very cool.)
+          </span>
         </figcaption>
       </figure>
 
