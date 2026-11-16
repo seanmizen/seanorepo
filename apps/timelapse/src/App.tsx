@@ -26,6 +26,7 @@ import {
   FRAME_LIMITS,
   formatClock,
   formatSeconds,
+  INTERVAL_MARKS_S,
   INTERVALS_S,
   type Settings,
   type StopMode,
@@ -39,6 +40,7 @@ import {
   Label,
   Row,
   Shutter,
+  Slider,
   Stepper,
   useTheme,
 } from './ui';
@@ -201,6 +203,15 @@ function Screen() {
             <Stepper
               values={INTERVALS_S}
               value={settings.intervalS}
+              format={formatSeconds}
+              onChange={(intervalS) => change({ intervalS })}
+              disabled={capturing}
+            />
+            <Slider
+              label="Interval between frames"
+              values={INTERVALS_S}
+              value={settings.intervalS}
+              marks={INTERVAL_MARKS_S}
               format={formatSeconds}
               onChange={(intervalS) => change({ intervalS })}
               disabled={capturing}

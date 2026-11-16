@@ -3,6 +3,7 @@
 // borders. A selected choice shows inverted.
 
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -177,6 +178,124 @@ export function Stepper({
   );
 }
 
+const THUMB = 20;
+const STEP_KEYS: Record<string, number> = {
+  ArrowRight: 1,
+  ArrowUp: 1,
+  ArrowLeft: -1,
+  ArrowDown: -1,
+};
+const MARK_W = 56;
+
+/**
+ * A slider over a list of values, on a log scale. A tap or a drag selects
+ * the nearest value. It uses the plain touch responder of View, so it needs
+ * no native module and works the same on the web and in Expo Go. The
+ * children take no pointer events, so locationX is always across the track.
+ * Screen readers change it with the increment and decrement actions, and
+ * on the web the arrow keys step it.
+ */
+export function Slider({
+  label,
+  values,
+  value,
+  marks,
+  format,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  values: number[];
+  value: number;
+  marks: number[];
+  format: (value: number) => string;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+}) {
+  const t = useTheme();
+  const [width, setWidth] = useState(0);
+  const lo = Math.log(values[0]);
+  const hi = Math.log(values[values.length - 1]);
+  const at = (v: number) => (Math.log(v) - lo) / (hi - lo);
+  const percent = (v: number) => `${at(v) * 100}%` as const;
+  const pick = (x: number) => {
+    if (!width) return;
+    const want = Math.min(1, Math.max(0, x / width));
+    let best = values[0];
+    for (const v of values)
+      if (Math.abs(at(v) - want) < Math.abs(at(best) - want)) best = v;
+    if (best !== value) onChange(best);
+  };
+  const step = (by: number) => {
+    const next = values[values.indexOf(value) + by];
+    if (next !== undefined) onChange(next);
+  };
+  return (
+    <View style={{ opacity: disabled ? 0.4 : 1 }}>
+      <View
+        accessible
+        focusable={!disabled}
+        role="slider"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={values.length - 1}
+        aria-valuenow={values.indexOf(value)}
+        aria-valuetext={format(value)}
+        aria-disabled={disabled}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(e) =>
+          !disabled && step(e.nativeEvent.actionName === 'increment' ? 1 : -1)
+        }
+        // On the web, the arrow keys step the slider.
+        onKeyDown={(e) => {
+          const by = STEP_KEYS[e.nativeEvent.key];
+          if (by === undefined || disabled) return;
+          e.preventDefault();
+          step(by);
+        }}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        onStartShouldSetResponder={() => !disabled}
+        onMoveShouldSetResponder={() => !disabled}
+        onResponderTerminationRequest={() => false}
+        onResponderGrant={(e) => pick(e.nativeEvent.locationX)}
+        onResponderMove={(e) => pick(e.nativeEvent.locationX)}
+        style={styles.track}
+      >
+        <View style={[styles.rail, { backgroundColor: t.muted }]} />
+        <View
+          style={[
+            styles.rail,
+            { backgroundColor: t.fg, width: percent(value) },
+          ]}
+        />
+        <View
+          style={[
+            styles.thumb,
+            { left: percent(value), borderColor: t.fg, backgroundColor: t.bg },
+          ]}
+        />
+      </View>
+      <View style={styles.marks}>
+        {marks.map((m, i) => (
+          <View
+            key={m}
+            style={[
+              styles.mark,
+              { left: percent(m) },
+              i === 0 && styles.markFirst,
+              i === marks.length - 1 && styles.markLast,
+            ]}
+          >
+            <Label muted size={11}>
+              {format(m)}
+            </Label>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** The round button that starts and stops the capture. */
 export function Shutter({
   recording,
@@ -251,6 +370,31 @@ const styles = StyleSheet.create({
   column: { gap: 6 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepperValue: { flex: 1, alignItems: 'center' },
+  track: { height: 36, marginHorizontal: THUMB / 2, justifyContent: 'center' },
+  rail: {
+    position: 'absolute',
+    height: 2,
+    width: '100%',
+    pointerEvents: 'none',
+  },
+  thumb: {
+    position: 'absolute',
+    width: THUMB,
+    height: THUMB,
+    marginLeft: -THUMB / 2,
+    borderRadius: THUMB / 2,
+    borderWidth: 2,
+    pointerEvents: 'none',
+  },
+  marks: { height: 16, marginHorizontal: THUMB / 2 },
+  mark: {
+    position: 'absolute',
+    width: MARK_W,
+    marginLeft: -MARK_W / 2,
+    alignItems: 'center',
+  },
+  markFirst: { marginLeft: -THUMB / 2, alignItems: 'flex-start' },
+  markLast: { marginLeft: THUMB / 2 - MARK_W, alignItems: 'flex-end' },
   shutter: {
     width: 68,
     height: 68,
