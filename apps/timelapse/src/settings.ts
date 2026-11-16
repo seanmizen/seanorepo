@@ -17,7 +17,16 @@ export type Settings = {
   cameraId: string;
 };
 
-export const INTERVALS_S = [0.5, 1, 2, 3, 5, 10, 15, 30, 60, 120, 300, 600];
+// The interval choices: tidy values from 0.1 s to 1 h, at about the same
+// distance apart on a log scale. The stepper steps through them one at a
+// time, and the slider snaps to them.
+export const INTERVALS_S = [
+  0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 7.5,
+  8, 9, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60, 90, 120, 150, 180, 240, 300,
+  360, 420, 480, 600, 900, 1200, 1800, 2700, 3600,
+];
+/** The labels under the interval slider. */
+export const INTERVAL_MARKS_S = [0.1, 1, 10, 60, 600, 3600];
 export const FRAME_LIMITS = [10, 25, 50, 100, 150, 200, 300, 500, 750, 1000];
 export const DURATIONS_S = [
   30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 28800,
@@ -68,12 +77,11 @@ export function estimate(s: Settings): Estimate {
   };
 }
 
-/** 0.5 -> "0.5 s", 90 -> "1 min 30 s", 7200 -> "2 h". */
+/** 0.25 -> "0.25 s", 7.5 -> "7.5 s", 90 -> "1 min 30 s", 7200 -> "2 h". */
 export function formatSeconds(totalS: number): string {
   if (totalS < 60) {
-    const rounded =
-      totalS < 10 ? Math.round(totalS * 10) / 10 : Math.round(totalS);
-    return `${rounded} s`;
+    const places = totalS < 1 ? 2 : totalS < 10 ? 1 : 0;
+    return `${Number(totalS.toFixed(places))} s`;
   }
   const whole = Math.round(totalS);
   const h = Math.floor(whole / 3600);
