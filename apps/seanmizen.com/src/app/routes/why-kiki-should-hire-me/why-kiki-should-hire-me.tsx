@@ -52,7 +52,10 @@ const WhyKikiShouldHireMe: FC = () => (
 
       {/* The Expo timelapse app goes here when it is live. */}
       <figure className={styles.artefact}>
-        <div className={styles.placeholder}>A React Native app. Soon.</div>
+        <div className={styles.placeholder}>
+          A React Native app I'm building right this second. You caught me
+          off-guard. Check back in at 4pm-4:30 and it'll be here
+        </div>
         <figcaption>He can ship fast.</figcaption>
       </figure>
 
@@ -76,7 +79,10 @@ const WhyKikiShouldHireMe: FC = () => (
         </p>
         <p>
           Thanks to AI I’m a polyglot. I use Go, Zig apps daily which I built
-          from scratch. I don’t know Go or Zig! But in many ways, today, I do.
+          from scratch. I don’t know Go or Zig! But today that does not matter.
+          You choose the best tool for the job, and ask the computer to make it
+          so. My role - our role - in the post-AI world is <em>discretion</em>.
+          When to say <em>no</em>.
         </p>
         <p>
           I have corporate experience and startup experience. Much, much more
