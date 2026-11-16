@@ -2,6 +2,9 @@ import type { FC } from 'react';
 import { SiteTitle } from '@/components';
 import styles from './why-kiki-should-hire-me.module.css';
 
+/* robots.txt keeps crawlers out of /why-kiki/: the CV has a phone number. */
+const CV = '/why-kiki/Sean-Mizen-Engineer-CV-2026-09-18.pdf';
+
 /*
   Three artefacts, each with a caption, and then Sean's blurb. The blurb is
   handwritten. Keep its words as Sean wrote them.
@@ -12,21 +15,38 @@ const WhyKikiShouldHireMe: FC = () => (
       <SiteTitle path="why-kiki-should-hire-me" />
 
       <figure className={styles.artefact}>
-        <video
-          className={styles.media}
-          src="/why-kiki/timelapse.mp4"
-          poster="/why-kiki/timelapse.jpg"
-          width={720}
-          height={700}
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls
-          preload="metadata"
-        >
-          <a href="/why-kiki/timelapse.mp4">The timelapse (MP4)</a>
-        </video>
+        <div className={styles.pair}>
+          <video
+            className={`${styles.media} ${styles.wide}`}
+            src="/why-kiki/timelapse.mp4"
+            poster="/why-kiki/timelapse.jpg"
+            width={720}
+            height={700}
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            preload="metadata"
+          >
+            <a href="/why-kiki/timelapse.mp4">The first timelapse (MP4)</a>
+          </video>
+          <video
+            className={`${styles.media} ${styles.tall}`}
+            src="/why-kiki/timelapse-2.mp4"
+            poster="/why-kiki/timelapse-2.jpg"
+            width={540}
+            height={960}
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            preload="metadata"
+          >
+            <a href="/why-kiki/timelapse-2.mp4">The second timelapse (MP4)</a>
+          </video>
+        </div>
         <figcaption>He loves hard work and a timelapse.</figcaption>
       </figure>
 
@@ -68,6 +88,13 @@ const WhyKikiShouldHireMe: FC = () => (
           packed District Line train on a wet Sunday.
         </p>
       </section>
+
+      <p className={styles.cv}>
+        <a href={CV} target="_blank" rel="noopener">
+          My CV<span className="sr-only"> (opens in a new tab)</span>
+        </a>{' '}
+        (PDF, 2 pages) <span aria-hidden="true">↗</span>
+      </p>
     </div>
   </main>
 );

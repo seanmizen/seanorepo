@@ -16,12 +16,30 @@
   margin-top: 1.5rem;
 }
 
-/* The video keeps its aspect ratio and never gets wider than the column. */
+/*
+  The two timelapses sit side by side at the same height. Each one grows in
+  proportion to its aspect ratio (width / height), so the heights match at
+  every column width.
+*/
+.pair {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0;
+}
+
 .media {
   display: block;
-  width: 100%;
+  min-width: 0;
   height: auto;
   padding: 0;
+}
+
+.wide {
+  flex: calc(720 / 700) 1 0;
+}
+
+.tall {
+  flex: calc(540 / 960) 1 0;
 }
 
 /* A slot for an artefact that is not on the page yet. */
@@ -40,7 +58,11 @@
 
 .blurb {
   margin-top: 2.5rem;
+}
+
+.cv {
   padding-bottom: 3rem;
+  font-size: 1.1rem;
 }
 
 .blurb p {
