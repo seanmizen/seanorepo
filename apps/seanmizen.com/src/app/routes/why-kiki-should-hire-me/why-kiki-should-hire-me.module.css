@@ -42,36 +42,15 @@
   flex: calc(540 / 960) 1 0;
 }
 
-/* The button that loads the timelapse app. It has the size of a slot. */
-.launch {
+/* A slot for an artefact that is not on the page yet. */
+.placeholder {
   display: grid;
   place-items: center;
-  width: 100%;
-  max-width: 20rem;
   min-height: 8rem;
   padding: 1rem;
+  text-align: center;
   border: 2px dashed currentColor;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .launch:hover {
-    border-style: solid;
-  }
-}
-
-/* The app is one tall screen, so the frame is phone-shaped. */
-.app {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 20rem;
-  height: 36rem;
-  padding: 0;
-  border: 1px solid currentColor;
+  opacity: 0.6;
 }
 
 /* The thirty frame is square, like the thirty canvas. */
