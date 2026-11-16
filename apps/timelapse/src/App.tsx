@@ -4,14 +4,7 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -26,7 +19,6 @@ import {
   FRAME_LIMITS,
   formatClock,
   formatSeconds,
-  INTERVAL_MARKS_S,
   INTERVALS_S,
   type Settings,
   type StopMode,
@@ -41,7 +33,6 @@ import {
   Row,
   Shutter,
   Slider,
-  Stepper,
   useTheme,
 } from './ui';
 
@@ -64,7 +55,6 @@ export default function App() {
 function Screen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const window = useWindowDimensions();
   const camera = useRef<CameraHandle>(null);
   const run = useRef<CaptureRun | null>(null);
 
@@ -80,10 +70,6 @@ function Screen() {
   const [notice, setNotice] = useState('');
 
   const capturing = phase === 'capturing';
-  const width = Math.min(window.width, MAX_WIDTH);
-  const previewHeight = Math.round(
-    Math.min((width * 3) / 4, window.height * 0.45),
-  );
   const est = estimate(settings);
   const target = targetFrames(settings);
 
@@ -164,6 +150,36 @@ function Screen() {
   };
 
   const selectedCamera = settings.cameraId || activeCamera;
+  const cameraIndex = devices.findIndex((d) => d.id === selectedCamera);
+  const nextCamera = () =>
+    change({ cameraId: devices[(cameraIndex + 1) % devices.length].id });
+
+  const interval = INTERVALS_S.indexOf(settings.intervalS);
+  const stepInterval = (by: number) =>
+    change({ intervalS: INTERVALS_S[interval + by] });
+
+  // The - and + of the Stop row change the frame count or the time.
+  const stopList = settings.stop === 'frames' ? FRAME_LIMITS : DURATIONS_S;
+  const stopValue =
+    settings.stop === 'frames' ? settings.stopFrames : settings.stopDurationS;
+  const stopIndex = stopList.indexOf(stopValue);
+  const stepStop = (by: number) => {
+    const next = stopList[stopIndex + by];
+    change(
+      settings.stop === 'frames'
+        ? { stopFrames: next }
+        : { stopDurationS: next },
+    );
+  };
+  const stopText = {
+    hand: 'by hand',
+    frames: `after ${settings.stopFrames} frames`,
+    duration: `after ${formatSeconds(settings.stopDurationS)}`,
+  }[settings.stop];
+  const estimateText =
+    est.frames === null
+      ? `Each minute makes ${round(est.perMinute.frames)} frames, ${formatSeconds(est.perMinute.videoS)} of video.`
+      : `${est.frames} frames over ${formatSeconds(est.captureS ?? 0)} make ${formatSeconds(est.videoS ?? 0)} of video.`;
 
   return (
     <View
@@ -174,7 +190,7 @@ function Screen() {
     >
       <StatusBar style="auto" />
       <View style={[styles.column, { maxWidth: MAX_WIDTH }]}>
-        <View style={[styles.preview, { height: previewHeight }]}>
+        <View style={styles.preview}>
           <Camera
             ref={camera}
             deviceId={settings.cameraId}
@@ -193,35 +209,49 @@ function Screen() {
               </Text>
             </View>
           )}
+          {phase === 'live' && devices.length > 1 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Switch the camera. Now: ${devices[cameraIndex]?.label ?? 'none'}`}
+              onPress={nextCamera}
+              style={styles.switch}
+            >
+              <Text numberOfLines={1} style={styles.switchText}>
+                ⇄ {devices[cameraIndex]?.label ?? 'Camera'}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <Row label="Interval between frames">
-            <Stepper
-              values={INTERVALS_S}
-              value={settings.intervalS}
-              format={formatSeconds}
-              onChange={(intervalS) => change({ intervalS })}
-              disabled={capturing}
+        <View style={styles.settings}>
+          <Row
+            label="Interval between frames"
+            value={formatSeconds(settings.intervalS)}
+          >
+            <Button
+              label="-"
+              disabled={capturing || interval <= 0}
+              onPress={() => stepInterval(-1)}
             />
             <Slider
               label="Interval between frames"
               values={INTERVALS_S}
               value={settings.intervalS}
-              marks={INTERVAL_MARKS_S}
               format={formatSeconds}
               onChange={(intervalS) => change({ intervalS })}
               disabled={capturing}
             />
+            <Button
+              label="+"
+              disabled={capturing || interval >= INTERVALS_S.length - 1}
+              onPress={() => stepInterval(1)}
+            />
           </Row>
 
-          <Row label="Stop">
+          <Row label="Stop" value={stopText}>
             <Choice<StopMode>
               options={[
-                { value: 'hand', label: 'By hand' },
+                { value: 'hand', label: 'Hand' },
                 { value: 'frames', label: 'Frames' },
                 { value: 'duration', label: 'Time' },
               ]}
@@ -229,27 +259,26 @@ function Screen() {
               onChange={(stop) => change({ stop })}
               disabled={capturing}
             />
-            {settings.stop === 'frames' && (
-              <Stepper
-                values={FRAME_LIMITS}
-                value={settings.stopFrames}
-                format={(n) => `after ${n} frames`}
-                onChange={(stopFrames) => change({ stopFrames })}
-                disabled={capturing}
-              />
-            )}
-            {settings.stop === 'duration' && (
-              <Stepper
-                values={DURATIONS_S}
-                value={settings.stopDurationS}
-                format={(s) => `after ${formatSeconds(s)}`}
-                onChange={(stopDurationS) => change({ stopDurationS })}
-                disabled={capturing}
-              />
-            )}
+            <Button
+              label="-"
+              disabled={capturing || settings.stop === 'hand' || stopIndex <= 0}
+              onPress={() => stepStop(-1)}
+            />
+            <Button
+              label="+"
+              disabled={
+                capturing ||
+                settings.stop === 'hand' ||
+                stopIndex >= stopList.length - 1
+              }
+              onPress={() => stepStop(1)}
+            />
           </Row>
 
-          <Row label="Playback frame rate">
+          <Row
+            label="Playback frame rate"
+            value={`plays ${round(est.speedup)}x faster`}
+          >
             <Choice<number>
               options={FPS_CHOICES.map((fps) => ({
                 value: fps,
@@ -261,44 +290,10 @@ function Screen() {
             />
           </Row>
 
-          <Row label="Camera">
-            {devices.length === 0 ? (
-              <Label muted>The list shows when the camera is allowed.</Label>
-            ) : (
-              <Choice<string>
-                column={Platform.OS === 'web'}
-                options={devices.map((d) => ({ value: d.id, label: d.label }))}
-                value={selectedCamera}
-                onChange={(cameraId) => change({ cameraId })}
-                disabled={capturing}
-              />
-            )}
-          </Row>
-
-          <Row label="Estimate">
-            {est.frames === null ? (
-              <>
-                <Label>
-                  Frames: {round(est.perMinute.frames)} for each minute of
-                  capture
-                </Label>
-                <Label>
-                  Video: {formatSeconds(est.perMinute.videoS)} for each minute
-                  of capture
-                </Label>
-              </>
-            ) : (
-              <>
-                <Label>Frames: {est.frames}</Label>
-                <Label>Capture: {formatSeconds(est.captureS ?? 0)}</Label>
-                <Label>Video: {formatSeconds(est.videoS ?? 0)}</Label>
-              </>
-            )}
-            <Label muted>
-              The video plays {round(est.speedup)}x faster than real time.
-            </Label>
-          </Row>
-        </ScrollView>
+          <Label muted size={12}>
+            {estimateText}
+          </Label>
+        </View>
 
         {notice !== '' && (
           <Text style={[styles.notice, { color: theme.fg }]}>{notice}</Text>
@@ -307,7 +302,7 @@ function Screen() {
         <View
           style={[
             styles.bar,
-            { paddingBottom: insets.bottom + 12, borderColor: theme.fg },
+            { paddingBottom: insets.bottom + 8, borderColor: theme.fg },
           ]}
         >
           <View style={styles.barSide}>
@@ -362,7 +357,12 @@ function round(n: number): string {
 const styles = StyleSheet.create({
   page: { flex: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%' },
-  preview: { backgroundColor: '#000', overflow: 'hidden' },
+  preview: {
+    flex: 1,
+    minHeight: 120,
+    backgroundColor: '#000',
+    overflow: 'hidden',
+  },
   badge: {
     position: 'absolute',
     top: 10,
@@ -376,20 +376,29 @@ const styles = StyleSheet.create({
   },
   badgeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#e00' },
   badgeText: { color: '#eee', fontFamily: FONT, fontSize: 14 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingVertical: 8 },
+  switch: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    maxWidth: '60%',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  switchText: { color: '#eee', fontFamily: FONT, fontSize: 13 },
+  settings: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 6, gap: 2 },
   notice: {
     fontFamily: FONT,
     fontSize: 13,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingTop: 12,
-    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingHorizontal: 12,
     borderTopWidth: 1,
   },
   barSide: { flex: 1, gap: 4, alignItems: 'flex-start' },
