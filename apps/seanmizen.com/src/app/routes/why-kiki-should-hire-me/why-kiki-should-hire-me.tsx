@@ -5,6 +5,8 @@ import styles from './why-kiki-should-hire-me.module.css';
 
 /* robots.txt keeps crawlers out of /why-kiki/: the CV has a phone number. */
 const CV = '/why-kiki/Sean-Mizen-Engineer-CV-2026-09-18.pdf';
+const GITHUB = 'https://github.com/seanmizen';
+const LINKEDIN = 'https://www.linkedin.com/in/seanmizen';
 
 /*
   The default Lisbon run of thirty. ?embed makes thirty show the map only.
@@ -175,11 +177,27 @@ const WhyKikiShouldHireMe: FC = () => (
         </p>
       </section>
 
+      {/*
+        One row of links. Each link keeps its note and its arrow on its line.
+        Screen readers skip the dots and the arrows.
+      */}
       <p className={styles.cv}>
-        <a href={CV} target="_blank" rel="noopener">
-          My CV<span className="sr-only"> (opens in a new tab)</span>
-        </a>{' '}
-        (PDF, 2 pages) <span aria-hidden="true">↗</span>
+        <span className={styles.item}>
+          <a href={CV} target="_blank" rel="noopener">
+            My CV<span className="sr-only"> (opens in a new tab)</span>
+          </a>{' '}
+          (PDF, 2 pages) <span aria-hidden="true">↗</span>
+        </span>{' '}
+        <span aria-hidden="true">·</span>{' '}
+        <span className={styles.item}>
+          <ExternalLink href={GITHUB}>GitHub</ExternalLink>{' '}
+          <span aria-hidden="true">↗</span>
+        </span>{' '}
+        <span aria-hidden="true">·</span>{' '}
+        <span className={styles.item}>
+          <ExternalLink href={LINKEDIN}>LinkedIn</ExternalLink>{' '}
+          <span aria-hidden="true">↗</span>
+        </span>
       </p>
     </div>
   </main>
