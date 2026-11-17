@@ -108,9 +108,17 @@
   margin-top: 2.5rem;
 }
 
+/* The line height keeps a focus ring clear of the line above. */
 .cv {
   padding-bottom: 3rem;
   font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+/* A narrow screen breaks the row between links, never inside one. */
+.item {
+  padding: 0;
+  white-space: nowrap;
 }
 
 .blurb p {
